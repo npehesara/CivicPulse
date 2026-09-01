@@ -1,68 +1,52 @@
-package civicpulse_backend.entity;
+package civicpulse_backend.dto.auth;
 
-import jakarta.persistence.*;
+import civicpulse_backend.entity.AccountStatus;
+import civicpulse_backend.entity.Role;
+import civicpulse_backend.entity.User;
+
 import java.time.LocalDateTime;
 
-@Entity
-@Table(name = "users")
-public class User {
+public class UserResponse {
 
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long userId;
-
-    @Column(nullable = false)
     private String fullName;
-
-    @Column(unique = true, nullable = false)
     private String email;
-
-    @Column(nullable = false)
-    private String passwordHash;
-
     private String phoneNumber;
-
     private String profileImage;
-
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
     private Role role;
-
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
     private AccountStatus accountStatus;
-
-    private Long registeredTerritoryId;
-
-    @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
-    public User() {
+    public UserResponse() {
     }
 
-    public User(String fullName, String email, String passwordHash, String phoneNumber, Role role, AccountStatus accountStatus) {
+    public UserResponse(Long userId, String fullName, String email, String phoneNumber, String profileImage,
+                        Role role, AccountStatus accountStatus, LocalDateTime createdAt) {
+        this.userId = userId;
         this.fullName = fullName;
         this.email = email;
-        this.passwordHash = passwordHash;
         this.phoneNumber = phoneNumber;
+        this.profileImage = profileImage;
         this.role = role;
         this.accountStatus = accountStatus;
+        this.createdAt = createdAt;
     }
 
-    @PrePersist
-    protected void onCreate() {
-        if (this.createdAt == null) {
-            this.createdAt = LocalDateTime.now();
+    public static UserResponse fromEntity(User user) {
+        if (user == null) {
+            return null;
         }
-        if (this.role == null) {
-            this.role = Role.CITIZEN;
-        }
-        if (this.accountStatus == null) {
-            this.accountStatus = AccountStatus.ACTIVE;
-        }
+        return new UserResponse(
+                user.getUserId(),
+                user.getFullName(),
+                user.getEmail(),
+                user.getPhoneNumber(),
+                user.getProfileImage(),
+                user.getRole(),
+                user.getAccountStatus(),
+                user.getCreatedAt()
+        );
     }
-
-    // Getters and Setters
 
     public Long getUserId() {
         return userId;
@@ -88,28 +72,12 @@ public class User {
         this.email = email;
     }
 
-    public String getPasswordHash() {
-        return passwordHash;
-    }
-
-    public void setPasswordHash(String passwordHash) {
-        this.passwordHash = passwordHash;
-    }
-
     public String getPhoneNumber() {
         return phoneNumber;
     }
 
     public void setPhoneNumber(String phoneNumber) {
         this.phoneNumber = phoneNumber;
-    }
-
-    public Role getRole() {
-        return role;
-    }
-
-    public void setRole(Role role) {
-        this.role = role;
     }
 
     public String getProfileImage() {
@@ -120,12 +88,12 @@ public class User {
         this.profileImage = profileImage;
     }
 
-    public Long getRegisteredTerritoryId() {
-        return registeredTerritoryId;
+    public Role getRole() {
+        return role;
     }
 
-    public void setRegisteredTerritoryId(Long registeredTerritoryId) {
-        this.registeredTerritoryId = registeredTerritoryId;
+    public void setRole(Role role) {
+        this.role = role;
     }
 
     public AccountStatus getAccountStatus() {
