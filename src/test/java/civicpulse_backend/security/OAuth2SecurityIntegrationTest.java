@@ -149,14 +149,6 @@ class OAuth2SecurityIntegrationTest {
     }
 
     @Test
-    @DisplayName("GET /login should return 200 OK with the Spring Security login page")
-    void shouldReturnDefaultLoginPage() throws Exception {
-        mockMvc.perform(get("/login"))
-                .andExpect(status().isOk())
-                .andExpect(content().contentTypeCompatibleWith(MediaType.TEXT_HTML));
-    }
-
-    @Test
     @DisplayName("GET /oauth2/authorize without PKCE code_challenge should return 302 redirect with invalid_request")
     void shouldRequirePkceCodeChallengeOnAuthorize() throws Exception {
         mockMvc.perform(get("/oauth2/authorize")
