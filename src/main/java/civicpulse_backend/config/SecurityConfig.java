@@ -90,8 +90,8 @@ public class SecurityConfig {
     private final UserDetailsService userDetailsService;
 
     public SecurityConfig(JwtAuthenticationFilter jwtAuthenticationFilter,
-                          JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint,
-                          UserDetailsService userDetailsService) {
+            JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint,
+            UserDetailsService userDetailsService) {
         this.jwtAuthenticationFilter = jwtAuthenticationFilter;
         this.jwtAuthenticationEntryPoint = jwtAuthenticationEntryPoint;
         this.userDetailsService = userDetailsService;
@@ -108,29 +108,23 @@ public class SecurityConfig {
     @Bean
     @Order(1)
     public SecurityFilterChain authorizationServerSecurityFilterChain(HttpSecurity http,
-                                                                      RegisteredClientRepository registeredClientRepository) throws Exception {
-        OAuth2AuthorizationServerConfigurer authorizationServerConfigurer =
-                new OAuth2AuthorizationServerConfigurer();
+            RegisteredClientRepository registeredClientRepository) throws Exception {
+        OAuth2AuthorizationServerConfigurer authorizationServerConfigurer = new OAuth2AuthorizationServerConfigurer();
 
         http
                 .securityMatcher(authorizationServerConfigurer.getEndpointsMatcher())
-                .with(authorizationServerConfigurer, authorizationServer ->
-                        authorizationServer
-                                .oidc(Customizer.withDefaults())
-                                .clientAuthentication(clientAuth -> {
-                                    clientAuth.authenticationConverter(new PublicClientRefreshTokenAuthenticationConverter());
-                                    clientAuth.authenticationProvider(new PublicClientRefreshTokenAuthenticationProvider(registeredClientRepository));
-                                })
-                )
-                .authorizeHttpRequests(authorize ->
-                        authorize.anyRequest().authenticated()
-                )
+                .with(authorizationServerConfigurer, authorizationServer -> authorizationServer
+                        .oidc(Customizer.withDefaults())
+                        .clientAuthentication(clientAuth -> {
+                            clientAuth.authenticationConverter(new PublicClientRefreshTokenAuthenticationConverter());
+                            clientAuth.authenticationProvider(
+                                    new PublicClientRefreshTokenAuthenticationProvider(registeredClientRepository));
+                        }))
+                .authorizeHttpRequests(authorize -> authorize.anyRequest().authenticated())
                 .exceptionHandling(exceptions -> exceptions
                         .defaultAuthenticationEntryPointFor(
                                 new LoginUrlAuthenticationEntryPoint("/login"),
-                                new MediaTypeRequestMatcher(MediaType.TEXT_HTML)
-                        )
-                )
+                                new MediaTypeRequestMatcher(MediaType.TEXT_HTML)))
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()));
 
         return http.build();
@@ -151,13 +145,11 @@ public class SecurityConfig {
                         .requestMatchers("/api/auth/**").permitAll()
                         .requestMatchers("/login", "/error").permitAll()
                         .requestMatchers("/oauth2/**", "/.well-known/**").permitAll()
-                        .anyRequest().authenticated()
-                )
+                        .anyRequest().authenticated())
                 .formLogin(Customizer.withDefaults())
                 .oauth2ResourceServer(oauth2 -> oauth2
                         .jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter()))
-                        .authenticationEntryPoint(jwtAuthenticationEntryPoint)
-                )
+                        .authenticationEntryPoint(jwtAuthenticationEntryPoint))
                 .authenticationProvider(authenticationProvider())
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
@@ -166,7 +158,8 @@ public class SecurityConfig {
 
     /**
      * Registered Client Repository for OAuth 2.1.
-     * Configures the Flutter mobile public client (no client_secret, PKCE enforced).
+     * Configures the Flutter mobile public client (no client_secret, PKCE
+     * enforced).
      */
     @Bean
     public RegisteredClientRepository registeredClientRepository() {
@@ -261,7 +254,8 @@ public class SecurityConfig {
     }
 
     /**
-     * Generates an in-memory 2048-bit RSA Key Pair for asymmetric JWT signing in development.
+     * Generates an in-memory 2048-bit RSA Key Pair for asymmetric JWT signing in
+     * development.
      */
     @Bean
     public JWKSource<SecurityContext> jwkSource() {
@@ -271,11 +265,12 @@ public class SecurityConfig {
     }
 
     /**
-     * Configures the OAuth2TokenGenerator supporting Access Tokens, ID Tokens, and Refresh Tokens for PKCE clients.
+     * Configures the OAuth2TokenGenerator supporting Access Tokens, ID Tokens, and
+     * Refresh Tokens for PKCE clients.
      */
     @Bean
     public OAuth2TokenGenerator<?> tokenGenerator(JWKSource<SecurityContext> jwkSource,
-                                                  OAuth2TokenCustomizer<JwtEncodingContext> jwtTokenCustomizer) {
+            OAuth2TokenCustomizer<JwtEncodingContext> jwtTokenCustomizer) {
         NimbusJwtEncoder jwtEncoder = new NimbusJwtEncoder(jwkSource);
         JwtGenerator jwtGenerator = new JwtGenerator(jwtEncoder);
         if (jwtTokenCustomizer != null) {
@@ -283,13 +278,15 @@ public class SecurityConfig {
         }
         OAuth2AccessTokenGenerator accessTokenGenerator = new OAuth2AccessTokenGenerator();
 
-        StringKeyGenerator refreshTokenStringGenerator = new Base64StringKeyGenerator(Base64.getUrlEncoder().withoutPadding(), 96);
+        StringKeyGenerator refreshTokenStringGenerator = new Base64StringKeyGenerator(
+                Base64.getUrlEncoder().withoutPadding(), 96);
         OAuth2TokenGenerator<OAuth2RefreshToken> refreshTokenGenerator = context -> {
             if (!OAuth2TokenType.REFRESH_TOKEN.equals(context.getTokenType())) {
                 return null;
             }
             if (context.getRegisteredClient() == null ||
-                    !context.getRegisteredClient().getAuthorizationGrantTypes().contains(AuthorizationGrantType.REFRESH_TOKEN)) {
+                    !context.getRegisteredClient().getAuthorizationGrantTypes()
+                            .contains(AuthorizationGrantType.REFRESH_TOKEN)) {
                 return null;
             }
             Instant issuedAt = Instant.now();
@@ -329,7 +326,7 @@ public class SecurityConfig {
 
     @Bean
     public AuthorizationServerSettings authorizationServerSettings(
-            @Value("${civicpulse.oauth2.issuer-url:http://localhost:8080}") String issuerUrl) {
+            @Value("${AUTH_ISSUER_URL}") String issuerUrl) {
         return AuthorizationServerSettings.builder()
                 .issuer(issuerUrl)
                 .build();
@@ -357,7 +354,8 @@ public class SecurityConfig {
         CorsConfiguration configuration = new CorsConfiguration();
         configuration.setAllowedOrigins(List.of("*"));
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));
-        configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-Requested-With", "Accept", "Origin"));
+        configuration
+                .setAllowedHeaders(List.of("Authorization", "Content-Type", "X-Requested-With", "Accept", "Origin"));
         configuration.setExposedHeaders(List.of("Authorization"));
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
@@ -365,4 +363,3 @@ public class SecurityConfig {
         return source;
     }
 }
-
