@@ -372,4 +372,22 @@ class OAuth2SecurityIntegrationTest {
                 .andExpect(status().is3xxRedirection())
                 .andExpect(redirectedUrl("/login?error"));
     }
+
+    @Test
+    @DisplayName("GET /login should return 200 OK with HTML login page")
+    void shouldReturnDefaultLoginPage() throws Exception {
+        mockMvc.perform(get("/login").accept(MediaType.TEXT_HTML))
+                .andExpect(status().isOk())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.TEXT_HTML))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("action=\"/login\"")));
+    }
+
+    @Test
+    @DisplayName("Unauthenticated OAuth authorize request should redirect browser to /login (302)")
+    void shouldRedirectOAuthAuthorizeToLoginPage() throws Exception {
+        mockMvc.perform(get("/oauth2/authorize?response_type=code&client_id=civicpulse-mobile-client&redirect_uri=http://localhost:8080/authorized&scope=openid&state=state123&code_challenge=E9Melhoa2OwvFrGMTJguCH5rtx64ZWqiJ61Z35NY-yo&code_challenge_method=S256")
+                        .accept(MediaType.TEXT_HTML))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(header().string("Location", org.hamcrest.Matchers.endsWith("/login")));
+    }
 }

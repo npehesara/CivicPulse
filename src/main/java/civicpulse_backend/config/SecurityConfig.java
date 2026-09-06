@@ -127,7 +127,6 @@ public class SecurityConfig {
                         .defaultAuthenticationEntryPointFor(
                                 new LoginUrlAuthenticationEntryPoint("/login"),
                                 new MediaTypeRequestMatcher(MediaType.TEXT_HTML)))
-                .formLogin(Customizer.withDefaults())
                 .authenticationProvider(authenticationProvider())
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()));
 
@@ -147,7 +146,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.POST, "/api/auth/register", "/api/auth/login").permitAll()
                         .requestMatchers("/api/auth/**").permitAll()
-                        .requestMatchers("/login", "/error").permitAll()
+                        .requestMatchers("/error").permitAll()
                         .requestMatchers("/oauth2/**", "/.well-known/**").permitAll()
                         .anyRequest().authenticated())
                 .formLogin(Customizer.withDefaults())
