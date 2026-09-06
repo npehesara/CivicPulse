@@ -108,12 +108,14 @@ public class SecurityConfig {
     @Bean
     @Order(1)
     public SecurityFilterChain authorizationServerSecurityFilterChain(HttpSecurity http,
-            RegisteredClientRepository registeredClientRepository) throws Exception {
+            RegisteredClientRepository registeredClientRepository,
+            AuthorizationServerSettings authorizationServerSettings) throws Exception {
         OAuth2AuthorizationServerConfigurer authorizationServerConfigurer = new OAuth2AuthorizationServerConfigurer();
 
         http
                 .securityMatcher(authorizationServerConfigurer.getEndpointsMatcher())
                 .with(authorizationServerConfigurer, authorizationServer -> authorizationServer
+                        .authorizationServerSettings(authorizationServerSettings)
                         .oidc(Customizer.withDefaults())
                         .clientAuthentication(clientAuth -> {
                             clientAuth.authenticationConverter(new PublicClientRefreshTokenAuthenticationConverter());
@@ -326,9 +328,15 @@ public class SecurityConfig {
 
     @Bean
     public AuthorizationServerSettings authorizationServerSettings(
-            @Value("${AUTH_ISSUER_URL}") String issuerUrl) {
+            @Value("${civicpulse.oauth2.issuer-url:${AUTH_ISSUER_URL:http://localhost:8080}}") String issuerUrl) {
+        String cleanIssuerUrl = (issuerUrl != null && !issuerUrl.trim().isEmpty())
+                ? issuerUrl.trim()
+                : "http://localhost:8080";
+        if (cleanIssuerUrl.endsWith("/")) {
+            cleanIssuerUrl = cleanIssuerUrl.substring(0, cleanIssuerUrl.length() - 1);
+        }
         return AuthorizationServerSettings.builder()
-                .issuer(issuerUrl)
+                .issuer(cleanIssuerUrl)
                 .build();
     }
 
