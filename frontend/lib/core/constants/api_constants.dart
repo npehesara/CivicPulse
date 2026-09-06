@@ -1,7 +1,13 @@
-import 'package:flutter/foundation.dart';
-
 class ApiConstants {
   ApiConstants._();
+
+  // Production / Testing Render backend URL
+  static const String productionBaseUrl = 'https://civicpulse-backend-cezi.onrender.com';
+
+  // Local development backend URLs
+  static const String localAndroidBaseUrl = 'http://10.0.2.2:8080';
+  static const String localLanBaseUrl = 'http://192.168.1.10:8080';
+  static const String localDefaultBaseUrl = 'http://localhost:8080';
 
   static String _customBaseUrl = '';
 
@@ -9,21 +15,7 @@ class ApiConstants {
     if (_customBaseUrl.isNotEmpty) {
       return _customBaseUrl;
     }
-
-    if (kIsWeb) {
-      return 'http://localhost:8080';
-    }
-
-    switch (defaultTargetPlatform) {
-      case TargetPlatform.android:
-        return 'http://192.168.1.10:8080';
-      case TargetPlatform.iOS:
-      case TargetPlatform.macOS:
-      case TargetPlatform.windows:
-      case TargetPlatform.linux:
-      default:
-        return 'http://localhost:8080';
-    }
+    return productionBaseUrl;
   }
 
   static void setBaseUrl(String url) {
