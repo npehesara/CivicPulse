@@ -46,7 +46,7 @@ class _IssueDetailScreenState extends State<IssueDetailScreen> {
     if (text.isEmpty) return;
 
     final success = await _controller.addComment(text);
-    if (success) {
+    if (success && mounted) {
       _commentController.clear();
       FocusScope.of(context).unfocus();
     }
@@ -279,7 +279,7 @@ class _IssueDetailScreenState extends State<IssueDetailScreen> {
                                                   Chip(
                                                     avatar: const Icon(Icons.location_on_outlined, size: 14, color: AppColors.primary),
                                                     label: Text(issue.territoryName!, style: const TextStyle(fontSize: 12, color: AppColors.primary, fontWeight: FontWeight.w600)),
-                                                    backgroundColor: AppColors.primaryLight.withOpacity(0.5),
+                                                    backgroundColor: AppColors.primaryLight.withValues(alpha: 0.5),
                                                     side: BorderSide.none,
                                                   ),
                                                 if (issue.departmentName != null)
@@ -392,7 +392,7 @@ class _IssueDetailScreenState extends State<IssueDetailScreen> {
                                           shrinkWrap: true,
                                           physics: const NeverScrollableScrollPhysics(),
                                           itemCount: controller.comments.length,
-                                          separatorBuilder: (_, __) => const SizedBox(height: 10),
+                                          separatorBuilder: (_, _) => const SizedBox(height: 10),
                                           itemBuilder: (context, index) {
                                             final comment = controller.comments[index];
                                             final isMyComment = currentUserId != null && currentUserId == comment.userId;
@@ -403,7 +403,7 @@ class _IssueDetailScreenState extends State<IssueDetailScreen> {
                                                 color: AppColors.background,
                                                 borderRadius: BorderRadius.circular(12),
                                                 border: Border.all(
-                                                  color: comment.isOfficial ? AppColors.primaryHover.withOpacity(0.5) : AppColors.border,
+                                                  color: comment.isOfficial ? AppColors.primaryHover.withValues(alpha: 0.5) : AppColors.border,
                                                 ),
                                               ),
                                               child: Column(
@@ -524,7 +524,7 @@ class _IssueDetailScreenState extends State<IssueDetailScreen> {
             height: 220,
             width: double.infinity,
             fit: BoxFit.cover,
-            errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+            errorBuilder: (_, _, _) => const SizedBox.shrink(),
           ),
         );
       } catch (_) {
@@ -539,7 +539,7 @@ class _IssueDetailScreenState extends State<IssueDetailScreen> {
         height: 220,
         width: double.infinity,
         fit: BoxFit.cover,
-        errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+        errorBuilder: (_, _, _) => const SizedBox.shrink(),
       ),
     );
   }

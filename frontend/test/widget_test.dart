@@ -42,6 +42,17 @@ class MockAuthRepository implements AuthRepository {
   }
 
   @override
+  Future<UserModel> loginWithOAuth() async {
+    return const UserModel(
+      userId: 1,
+      fullName: 'Test User',
+      email: 'test@example.com',
+      role: 'CITIZEN',
+      accountStatus: 'ACTIVE',
+    );
+  }
+
+  @override
   Future<void> logout() async {}
 
   @override

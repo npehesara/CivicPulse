@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import '../../../../core/auth/oauth_exception.dart';
 import '../../../../core/network/api_exception.dart';
 import '../../data/models/login_request_model.dart';
 import '../../data/models/register_request_model.dart';
@@ -53,6 +54,42 @@ class AuthController extends ChangeNotifier {
     }
 
     notifyListeners();
+  }
+
+  Future<bool> loginWithOAuth() async {
+    _status = AuthStatus.loading;
+    _errorMessage = null;
+    _validationErrors = null;
+    notifyListeners();
+
+    try {
+      final user = await authRepository.loginWithOAuth();
+      _currentUser = user;
+      _status = AuthStatus.authenticated;
+      notifyListeners();
+      return true;
+    } on OAuthException catch (e) {
+      if (e.isUserCancelled) {
+        _status = AuthStatus.unauthenticated;
+        _errorMessage = null;
+      } else {
+        _status = AuthStatus.error;
+        _errorMessage = e.message;
+      }
+      notifyListeners();
+      return false;
+    } on ApiException catch (e) {
+      _status = AuthStatus.error;
+      _errorMessage = e.message;
+      _validationErrors = e.validationErrors;
+      notifyListeners();
+      return false;
+    } catch (e) {
+      _status = AuthStatus.error;
+      _errorMessage = 'Unable to sign in with OAuth. Please try again.';
+      notifyListeners();
+      return false;
+    }
   }
 
   Future<bool> login(String email, String password) async {

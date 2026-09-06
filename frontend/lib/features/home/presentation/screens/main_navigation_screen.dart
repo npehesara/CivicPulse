@@ -3,11 +3,12 @@ import 'package:provider/provider.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../map/presentation/screens/map_screen.dart';
 import '../../../messages/presentation/controllers/message_controller.dart';
-import '../../../messages/presentation/screens/messages_screen.dart';
 import '../../../notifications/presentation/controllers/notification_controller.dart';
+import '../../../notifications/presentation/screens/notifications_tab_screen.dart';
 import '../../../users/presentation/screens/profile_screen.dart';
 import 'home_feed_screen.dart';
 
+/// Main navigation shell containing the 4 primary tabs: Home | Map | Notifications | Profile
 class MainNavigationScreen extends StatefulWidget {
   final int initialIndex;
 
@@ -23,7 +24,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   final List<Widget> _screens = const [
     HomeFeedScreen(),
     MapScreen(),
-    MessagesScreen(),
+    NotificationsTabScreen(),
     ProfileScreen(),
   ];
 
@@ -41,7 +42,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   Widget build(BuildContext context) {
     final msgController = context.watch<MessageController>();
     final notifController = context.watch<NotificationController>();
-    final totalInboxBadges = msgController.totalUnreadCount + notifController.unreadCount;
+    final unreadCount = notifController.unreadCount + msgController.totalUnreadCount;
 
     return Scaffold(
       body: IndexedStack(
@@ -85,18 +86,18 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
             ),
             NavigationDestination(
               icon: Badge(
-                isLabelVisible: totalInboxBadges > 0,
-                label: Text('$totalInboxBadges'),
+                isLabelVisible: unreadCount > 0,
+                label: Text('$unreadCount'),
                 backgroundColor: AppColors.error,
-                child: const Icon(Icons.forum_outlined),
+                child: const Icon(Icons.notifications_outlined),
               ),
               selectedIcon: Badge(
-                isLabelVisible: totalInboxBadges > 0,
-                label: Text('$totalInboxBadges'),
+                isLabelVisible: unreadCount > 0,
+                label: Text('$unreadCount'),
                 backgroundColor: AppColors.error,
-                child: const Icon(Icons.forum),
+                child: const Icon(Icons.notifications),
               ),
-              label: 'Messages',
+              label: 'Notifications',
             ),
             const NavigationDestination(
               icon: Icon(Icons.person_outline),

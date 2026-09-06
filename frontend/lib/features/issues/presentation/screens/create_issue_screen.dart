@@ -29,7 +29,6 @@ class _CreateIssueScreenState extends State<CreateIssueScreen> {
 
   List<CategoryModel> _categories = [];
   List<TerritoryModel> _territories = [];
-  List<DepartmentModel> _departments = [];
 
   CategoryModel? _selectedCategory;
   TerritoryModel? _selectedTerritory;
@@ -66,12 +65,10 @@ class _CreateIssueScreenState extends State<CreateIssueScreen> {
     try {
       final cats = await repo.getCategories();
       final terrs = await repo.getTerritories();
-      final depts = await repo.getDepartments();
 
       setState(() {
         _categories = cats;
         _territories = terrs;
-        _departments = depts;
         if (cats.isNotEmpty) _selectedCategory = cats.first;
         if (terrs.isNotEmpty) _selectedTerritory = terrs.first;
         _isLoadingMetadata = false;
@@ -190,8 +187,8 @@ class _CreateIssueScreenState extends State<CreateIssueScreen> {
         'isTransitReport': _isTransitReport,
         if (_selectedTerritory != null) 'territoryId': _selectedTerritory!.territoryId,
         if (_selectedDepartment != null) 'departmentId': _selectedDepartment!.departmentId,
-        if (lat != null) 'latitude': lat,
-        if (lng != null) 'longitude': lng,
+        'latitude': ?lat,
+        'longitude': ?lng,
       };
 
       final created = await repo.createIssue(body);
@@ -313,7 +310,7 @@ class _CreateIssueScreenState extends State<CreateIssueScreen> {
                     const Text('Category *', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: AppColors.textPrimary)),
                     const SizedBox(height: 6),
                     DropdownButtonFormField<CategoryModel>(
-                      value: _selectedCategory,
+                      initialValue: _selectedCategory,
                       isExpanded: true,
                       decoration: InputDecoration(
                         filled: true,
@@ -333,7 +330,7 @@ class _CreateIssueScreenState extends State<CreateIssueScreen> {
                     const Text('Territory / Region', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: AppColors.textPrimary)),
                     const SizedBox(height: 6),
                     DropdownButtonFormField<TerritoryModel>(
-                      value: _selectedTerritory,
+                      initialValue: _selectedTerritory,
                       isExpanded: true,
                       decoration: InputDecoration(
                         filled: true,
@@ -359,7 +356,7 @@ class _CreateIssueScreenState extends State<CreateIssueScreen> {
                               const Text('Severity', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: AppColors.textPrimary)),
                               const SizedBox(height: 6),
                               DropdownButtonFormField<String>(
-                                value: _selectedSeverity,
+                                initialValue: _selectedSeverity,
                                 isExpanded: true,
                                 decoration: InputDecoration(
                                   filled: true,
@@ -386,7 +383,7 @@ class _CreateIssueScreenState extends State<CreateIssueScreen> {
                               const Text('Visibility', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: AppColors.textPrimary)),
                               const SizedBox(height: 6),
                               DropdownButtonFormField<String>(
-                                value: _selectedVisibility,
+                                initialValue: _selectedVisibility,
                                 isExpanded: true,
                                 decoration: InputDecoration(
                                   filled: true,
@@ -414,7 +411,7 @@ class _CreateIssueScreenState extends State<CreateIssueScreen> {
                       title: const Text('Transit Issue Report', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
                       subtitle: const Text('Enable if this relates to public bus, railway, or transit services', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
                       value: _isTransitReport,
-                      activeColor: AppColors.primary,
+                      activeThumbColor: AppColors.primary,
                       onChanged: (val) => setState(() => _isTransitReport = val),
                     ),
 

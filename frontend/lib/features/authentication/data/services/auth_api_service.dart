@@ -3,6 +3,7 @@ import '../../../../core/network/api_client.dart';
 import '../models/auth_response_model.dart';
 import '../models/login_request_model.dart';
 import '../models/register_request_model.dart';
+import '../models/user_model.dart';
 
 class AuthApiService {
   final ApiClient apiClient;
@@ -25,5 +26,13 @@ class AuthApiService {
       requiresAuth: false,
     );
     return AuthResponseModel.fromJson(response as Map<String, dynamic>);
+  }
+
+  Future<UserModel> getCurrentUser() async {
+    final response = await apiClient.get(
+      ApiConstants.userMeEndpoint,
+      requiresAuth: true,
+    );
+    return UserModel.fromJson(response as Map<String, dynamic>);
   }
 }

@@ -137,7 +137,7 @@ class _NotificationsTabScreenState extends State<NotificationsTabScreen> {
             child: ListView.separated(
               padding: const EdgeInsets.all(16),
               itemCount: notifications.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 10),
+              separatorBuilder: (_, _) => const SizedBox(height: 10),
               itemBuilder: (context, index) {
                 final notif = notifications[index];
                 final icon = _getIconForType(notif.type);
@@ -156,7 +156,7 @@ class _NotificationsTabScreenState extends State<NotificationsTabScreen> {
                     contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                     leading: CircleAvatar(
                       radius: 20,
-                      backgroundColor: color.withOpacity(0.12),
+                      backgroundColor: color.withValues(alpha: 0.12),
                       child: Icon(icon, size: 20, color: color),
                     ),
                     title: Text(

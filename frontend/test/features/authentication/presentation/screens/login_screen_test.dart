@@ -12,6 +12,9 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
 class MockAuthRepo implements AuthRepository {
+  bool oauthCalled = false;
+  bool shouldSucceed = true;
+
   @override
   Future<UserModel?> getCurrentUser() async => null;
 
@@ -23,7 +26,28 @@ class MockAuthRepo implements AuthRepository {
     return AuthResponseModel(
       token: 'token',
       message: 'success',
-      user: UserModel(userId: 1, fullName: 'Test', email: request.email, role: 'CITIZEN', accountStatus: 'ACTIVE'),
+      user: UserModel(
+        userId: 1,
+        fullName: 'Test',
+        email: request.email,
+        role: 'CITIZEN',
+        accountStatus: 'ACTIVE',
+      ),
+    );
+  }
+
+  @override
+  Future<UserModel> loginWithOAuth() async {
+    oauthCalled = true;
+    if (!shouldSucceed) {
+      throw Exception('OAuth cancelled');
+    }
+    return const UserModel(
+      userId: 1,
+      fullName: 'OAuth User',
+      email: 'oauth@example.com',
+      role: 'CITIZEN',
+      accountStatus: 'ACTIVE',
     );
   }
 
@@ -35,7 +59,13 @@ class MockAuthRepo implements AuthRepository {
     return AuthResponseModel(
       token: 'token',
       message: 'success',
-      user: UserModel(userId: 1, fullName: request.fullName, email: request.email, role: 'CITIZEN', accountStatus: 'ACTIVE'),
+      user: UserModel(
+        userId: 1,
+        fullName: request.fullName,
+        email: request.email,
+        role: 'CITIZEN',
+        accountStatus: 'ACTIVE',
+      ),
     );
   }
 }
@@ -66,8 +96,9 @@ void main() {
     expect(find.text(AppStrings.registerLink), findsOneWidget);
   });
 
-  testWidgets('Submitting empty form should trigger validation error messages', (tester) async {
+  testWidgets('Tapping sign in button should trigger OAuth login flow and handle cancellation/failure cleanly', (tester) async {
     final mockRepo = MockAuthRepo();
+    mockRepo.shouldSucceed = false; // Stay on screen to verify UI state
     final authController = AuthController(authRepository: mockRepo);
 
     await tester.pumpWidget(
@@ -80,11 +111,12 @@ void main() {
     );
     await tester.pump();
 
-    // Tap sign in without filling form
+    // Tap sign in button to trigger OAuth flow
     await tester.tap(find.text(AppStrings.signInButton));
     await tester.pumpAndSettle();
 
-    expect(find.text('Email address is required'), findsOneWidget);
-    expect(find.text('Password is required'), findsOneWidget);
+    expect(mockRepo.oauthCalled, isTrue);
+    expect(authController.status, AuthStatus.error);
+    expect(find.text('Unable to sign in with OAuth. Please try again.'), findsOneWidget);
   });
 }

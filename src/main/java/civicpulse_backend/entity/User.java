@@ -40,7 +40,8 @@ public class User {
     public User() {
     }
 
-    public User(String fullName, String email, String passwordHash, String phoneNumber, Role role, AccountStatus accountStatus) {
+    public User(String fullName, String email, String passwordHash, String phoneNumber, Role role,
+            AccountStatus accountStatus) {
         this.fullName = fullName;
         this.email = email;
         this.passwordHash = passwordHash;

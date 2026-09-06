@@ -49,6 +49,14 @@ class ApiException implements Exception {
     );
   }
 
+  factory ApiException.unauthorized([String? message]) {
+    return ApiException(
+      statusCode: 401,
+      message: message ?? 'Session expired or unauthorized. Please sign in again.',
+      error: 'unauthorized',
+    );
+  }
+
   static String _defaultMessageForStatus(int statusCode) {
     switch (statusCode) {
       case 400:

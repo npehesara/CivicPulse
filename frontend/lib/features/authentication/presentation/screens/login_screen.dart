@@ -35,14 +35,7 @@ class _LoginScreenState extends State<LoginScreen> {
     final authController = context.read<AuthController>();
     authController.clearError();
 
-    if (!_formKey.currentState!.validate()) {
-      return;
-    }
-
-    final success = await authController.login(
-      _emailController.text,
-      _passwordController.text,
-    );
+    final success = await authController.loginWithOAuth();
 
     if (success && mounted) {
       Navigator.of(context).pushAndRemoveUntil(

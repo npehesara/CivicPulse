@@ -169,7 +169,7 @@ class IssueApiService {
       ApiConstants.issueImagesEndpoint(issueId),
       body: {
         'imageUrl': imageUrl,
-        if (filename != null) 'originalFilename': filename,
+        'originalFilename': ?filename,
       },
     );
     return IssueImageModel.fromJson(response as Map<String, dynamic>);

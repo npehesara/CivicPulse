@@ -142,7 +142,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                     const Text('Registered Territory / Council', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: AppColors.textPrimary)),
                     const SizedBox(height: 6),
                     DropdownButtonFormField<TerritoryModel>(
-                      value: _selectedTerritory,
+                      initialValue: _selectedTerritory,
                       isExpanded: true,
                       decoration: InputDecoration(
                         filled: true,

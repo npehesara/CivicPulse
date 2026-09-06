@@ -16,7 +16,7 @@ class ApiConstants {
 
     switch (defaultTargetPlatform) {
       case TargetPlatform.android:
-        return 'http://10.0.2.2:8080';
+        return 'http://192.168.1.10:8080';
       case TargetPlatform.iOS:
       case TargetPlatform.macOS:
       case TargetPlatform.windows:
@@ -30,7 +30,19 @@ class ApiConstants {
     _customBaseUrl = url;
   }
 
-  // Auth Endpoints
+  // OAuth 2.1 Configuration
+  static const String oauthClientId = 'civicpulse-mobile-client';
+  static const String oauthRedirectUrl = 'civicpulse://oauth2redirect';
+  static String get oauthDiscoveryUrl => '$baseUrl/.well-known/openid-configuration';
+  static const List<String> oauthScopes = [
+    'openid',
+    'profile',
+    'offline_access',
+    'civicpulse.read',
+    'civicpulse.write',
+  ];
+
+  // Auth Endpoints (Legacy / Registration)
   static const String registerEndpoint = '/api/auth/register';
   static const String loginEndpoint = '/api/auth/login';
 

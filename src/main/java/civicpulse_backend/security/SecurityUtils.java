@@ -6,6 +6,8 @@ import civicpulse_backend.exception.InvalidCredentialsException;
 import civicpulse_backend.repository.UserRepository;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -22,6 +24,17 @@ public class SecurityUtils {
         if (authentication == null || !authentication.isAuthenticated() || "anonymousUser".equals(authentication.getPrincipal())) {
             throw new InvalidCredentialsException("User is not authenticated");
         }
+
+        Object principal = authentication.getPrincipal();
+        if (principal instanceof Jwt jwt) {
+            String email = jwt.getSubject();
+            if (email != null && !email.isBlank()) {
+                return email;
+            }
+        } else if (principal instanceof UserDetails userDetails) {
+            return userDetails.getUsername();
+        }
+
         return authentication.getName();
     }
 
@@ -41,3 +54,4 @@ public class SecurityUtils {
         return user.getRole() == Role.ADMIN;
     }
 }
+

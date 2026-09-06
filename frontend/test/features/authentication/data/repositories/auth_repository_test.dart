@@ -1,3 +1,5 @@
+import 'package:civicpulse_frontend/core/auth/oauth_service.dart';
+import 'package:civicpulse_frontend/core/auth/oauth_session.dart';
 import 'package:civicpulse_frontend/core/network/api_client.dart';
 import 'package:civicpulse_frontend/core/network/api_exception.dart';
 import 'package:civicpulse_frontend/core/storage/session_manager.dart';
@@ -52,6 +54,20 @@ class FakeAuthApiService implements AuthApiService {
       ),
     );
   }
+
+  @override
+  Future<UserModel> getCurrentUser() async {
+    if (shouldFail) {
+      throw ApiException(statusCode: failureCode, message: failureMessage);
+    }
+    return const UserModel(
+      userId: 1,
+      fullName: 'OAuth Citizen',
+      email: 'citizen@example.com',
+      role: 'CITIZEN',
+      accountStatus: 'ACTIVE',
+    );
+  }
 }
 
 class FakeSessionManager extends SessionManager {
@@ -61,6 +77,11 @@ class FakeSessionManager extends SessionManager {
   @override
   Future<void> saveSession({required String token, required UserModel user}) async {
     this.token = token;
+    this.user = user;
+  }
+
+  @override
+  Future<void> saveUser(UserModel user) async {
     this.user = user;
   }
 
@@ -80,21 +101,50 @@ class FakeSessionManager extends SessionManager {
   }
 }
 
+class FakeOAuthService extends Fake implements OAuthService {
+  bool shouldFail = false;
+
+  @override
+  Future<OAuthSession> authorize({
+    List<String>? promptValues,
+    Map<String, String>? additionalParameters,
+  }) async {
+    if (shouldFail) {
+      throw Exception('OAuth failed');
+    }
+    return const OAuthSession(
+      accessToken: 'oauth_access_token_123',
+      refreshToken: 'oauth_refresh_token_456',
+    );
+  }
+}
+
 void main() {
   late FakeAuthApiService apiService;
   late FakeSessionManager sessionManager;
+  late FakeOAuthService oauthService;
   late AuthRepositoryImpl authRepository;
 
   setUp(() {
     apiService = FakeAuthApiService();
     sessionManager = FakeSessionManager();
+    oauthService = FakeOAuthService();
     authRepository = AuthRepositoryImpl(
       apiService: apiService,
       sessionManager: sessionManager,
+      oauthService: oauthService,
     );
   });
 
   group('AuthRepository Test', () {
+    test('loginWithOAuth should authorize, fetch current user, save profile, and return UserModel', () async {
+      final user = await authRepository.loginWithOAuth();
+
+      expect(user.email, 'citizen@example.com');
+      expect(user.fullName, 'OAuth Citizen');
+      expect((await sessionManager.getUser())?.email, 'citizen@example.com');
+    });
+
     test('successful login should save session and return AuthResponseModel', () async {
       final request = LoginRequestModel(email: 'john@example.com', password: 'Password123!');
       final response = await authRepository.login(request);
@@ -134,7 +184,7 @@ void main() {
     test('logout should clear token and user from session', () async {
       await sessionManager.saveSession(
         token: 'token123',
-        user: UserModel(
+        user: const UserModel(
           userId: 1,
           fullName: 'John',
           email: 'john@example.com',

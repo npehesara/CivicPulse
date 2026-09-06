@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'core/auth/oauth_service.dart';
 import 'core/constants/app_strings.dart';
 import 'core/network/api_client.dart';
 import 'core/storage/session_manager.dart';
@@ -27,13 +28,18 @@ void main() async {
   final sessionManager = SessionManager();
   await sessionManager.init();
 
-  final apiClient = ApiClient(sessionManager: sessionManager);
+  // Auth & Network
+  final oauthService = OAuthService(sessionManager: sessionManager);
+  final apiClient = ApiClient(
+    sessionManager: sessionManager,
+    oauthService: oauthService,
+  );
 
-  // Auth
   final authApiService = AuthApiService(apiClient: apiClient);
   final authRepository = AuthRepositoryImpl(
     apiService: authApiService,
     sessionManager: sessionManager,
+    oauthService: oauthService,
   );
 
   // Issues

@@ -22,6 +22,9 @@ class MockRegisterAuthRepo implements AuthRepository {
   Future<AuthResponseModel> login(LoginRequestModel request) async => throw UnimplementedError();
 
   @override
+  Future<UserModel> loginWithOAuth() async => throw UnimplementedError();
+
+  @override
   Future<void> logout() async {}
 
   @override

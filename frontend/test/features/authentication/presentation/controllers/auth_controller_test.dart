@@ -1,3 +1,4 @@
+import 'package:civicpulse_frontend/core/auth/oauth_exception.dart';
 import 'package:civicpulse_frontend/core/network/api_exception.dart';
 import 'package:civicpulse_frontend/features/authentication/data/models/auth_response_model.dart';
 import 'package:civicpulse_frontend/features/authentication/data/models/login_request_model.dart';
@@ -11,7 +12,7 @@ class MockAuthRepository implements AuthRepository {
   bool shouldSucceed = true;
   UserModel? storedUser;
   bool isUserLoggedIn = false;
-  ApiException? errorToThrow;
+  Exception? errorToThrow;
 
   @override
   Future<AuthResponseModel> login(LoginRequestModel request) async {
@@ -28,6 +29,23 @@ class MockAuthRepository implements AuthRepository {
     storedUser = user;
     isUserLoggedIn = true;
     return AuthResponseModel(token: 'valid_jwt_token', message: 'Login successful', user: user);
+  }
+
+  @override
+  Future<UserModel> loginWithOAuth() async {
+    if (!shouldSucceed) {
+      throw errorToThrow ?? const OAuthException(message: 'OAuth authorization failed.');
+    }
+    const user = UserModel(
+      userId: 1,
+      fullName: 'OAuth Citizen',
+      email: 'oauth@example.com',
+      role: 'CITIZEN',
+      accountStatus: 'ACTIVE',
+    );
+    storedUser = user;
+    isUserLoggedIn = true;
+    return user;
   }
 
   @override
@@ -74,7 +92,43 @@ void main() {
       expect(authController.isAuthenticated, isFalse);
     });
 
-    test('login success should update status to authenticated and store user', () async {
+    test('loginWithOAuth success should update status to authenticated and store user', () async {
+      final success = await authController.loginWithOAuth();
+
+      expect(success, isTrue);
+      expect(authController.status, AuthStatus.authenticated);
+      expect(authController.isAuthenticated, isTrue);
+      expect(authController.currentUser?.email, 'oauth@example.com');
+      expect(authController.errorMessage, isNull);
+    });
+
+    test('loginWithOAuth cancellation should set status unauthenticated without error message', () async {
+      mockRepository.shouldSucceed = false;
+      mockRepository.errorToThrow = OAuthException.userCancelled();
+
+      final success = await authController.loginWithOAuth();
+
+      expect(success, isFalse);
+      expect(authController.status, AuthStatus.unauthenticated);
+      expect(authController.isAuthenticated, isFalse);
+      expect(authController.errorMessage, isNull);
+    });
+
+    test('loginWithOAuth failure should update status to error and set message', () async {
+      mockRepository.shouldSucceed = false;
+      mockRepository.errorToThrow = const OAuthException(
+        message: 'Authorization server returned an error.',
+      );
+
+      final success = await authController.loginWithOAuth();
+
+      expect(success, isFalse);
+      expect(authController.status, AuthStatus.error);
+      expect(authController.isAuthenticated, isFalse);
+      expect(authController.errorMessage, 'Authorization server returned an error.');
+    });
+
+    test('legacy login success should update status to authenticated and store user', () async {
       final success = await authController.login('john@example.com', 'Password123!');
 
       expect(success, isTrue);
@@ -84,7 +138,7 @@ void main() {
       expect(authController.errorMessage, isNull);
     });
 
-    test('login failure should update status to error and set message', () async {
+    test('legacy login failure should update status to error and set message', () async {
       mockRepository.shouldSucceed = false;
       mockRepository.errorToThrow = ApiException(
         statusCode: 401,
@@ -130,7 +184,7 @@ void main() {
     });
 
     test('logout should clear currentUser and set unauthenticated', () async {
-      await authController.login('john@example.com', 'Password123!');
+      await authController.loginWithOAuth();
       expect(authController.isAuthenticated, isTrue);
 
       await authController.logout();
