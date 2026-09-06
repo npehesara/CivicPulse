@@ -50,6 +50,9 @@ import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.LoginUrlAuthenticationEntryPoint;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.security.web.util.matcher.MediaTypeRequestMatcher;
+import org.springframework.security.web.savedrequest.HttpSessionRequestCache;
+import org.springframework.security.web.savedrequest.RequestCache;
+import org.springframework.web.filter.ForwardedHeaderFilter;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.security.crypto.keygen.Base64StringKeyGenerator;
@@ -97,6 +100,16 @@ public class SecurityConfig {
         this.userDetailsService = userDetailsService;
     }
 
+    @Bean
+    public ForwardedHeaderFilter forwardedHeaderFilter() {
+        return new ForwardedHeaderFilter();
+    }
+
+    @Bean
+    public RequestCache requestCache() {
+        return new HttpSessionRequestCache();
+    }
+
     /**
      * Spring Authorization Server Filter Chain (Priority Order 1).
      * Handles standard OAuth 2.1 protocol endpoints:
@@ -123,6 +136,7 @@ public class SecurityConfig {
                                     new PublicClientRefreshTokenAuthenticationProvider(registeredClientRepository));
                         }))
                 .authorizeHttpRequests(authorize -> authorize.anyRequest().authenticated())
+                .requestCache(cache -> cache.requestCache(requestCache()))
                 .exceptionHandling(exceptions -> exceptions
                         .defaultAuthenticationEntryPointFor(
                                 new LoginUrlAuthenticationEntryPoint("/login"),
@@ -149,6 +163,7 @@ public class SecurityConfig {
                         .requestMatchers("/error").permitAll()
                         .requestMatchers("/oauth2/**", "/.well-known/**").permitAll()
                         .anyRequest().authenticated())
+                .requestCache(cache -> cache.requestCache(requestCache()))
                 .formLogin(Customizer.withDefaults())
                 .oauth2ResourceServer(oauth2 -> oauth2
                         .jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter()))
