@@ -382,4 +382,75 @@ class OAuth2SecurityIntegrationTest {
                 .andExpect(status().is3xxRedirection())
                 .andExpect(header().string("Location", org.hamcrest.Matchers.endsWith("/login")));
     }
+
+    @Test
+    @DisplayName("OAuth login flow: saved /oauth2/authorize request is restored after form login, not redirected to '/'")
+    void shouldRestoreSavedOAuthAuthorizeRequestAfterFormLogin() throws Exception {
+        // Register a user to authenticate with
+        String email = "oauth_restore_" + System.currentTimeMillis() + "@example.com";
+        String password = "RestoreTest123!";
+        mockMvc.perform(post("/api/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(String.format(
+                                "{\"fullName\":\"Restore User\",\"email\":\"%s\",\"password\":\"%s\"}",
+                                email, password)))
+                .andExpect(status().isCreated());
+
+        // Step 1: Unauthenticated GET /oauth2/authorize.
+        // Parameters are embedded directly in the URL string — MockMvc .param() on a GET
+        // request populates only the parameterMap, NOT the raw query string. The Spring
+        // Authorization Server's OAuth2AuthorizationEndpointFilter reads the raw query
+        // string, so parameters must be in the URL. The @Order(1) chain's
+        // ExceptionTranslationFilter should save the request in the HttpSession and
+        // redirect the browser to /login.
+        var authorizeResult = mockMvc.perform(get(
+                        "/oauth2/authorize" +
+                        "?response_type=code" +
+                        "&client_id=civicpulse-mobile-client" +
+                        "&redirect_uri=http://localhost:8080/authorized" +
+                        "&scope=openid" +
+                        "&state=restore-test-state-9876" +
+                        "&code_challenge=E9Melhoa2OwvFrGMTJguCH5rtx64ZWqiJ61Z35NY-yo" +
+                        "&code_challenge_method=S256")
+                        .accept(MediaType.TEXT_HTML))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(header().string("Location", org.hamcrest.Matchers.endsWith("/login")))
+                .andReturn();
+
+        // Step 2: Verify the original OAuth request is saved in the HTTP session.
+        // SPRING_SECURITY_SAVED_REQUEST must be present for the success handler to restore it.
+        var session = (org.springframework.mock.web.MockHttpSession)
+                authorizeResult.getRequest().getSession(false);
+        org.junit.jupiter.api.Assertions.assertNotNull(session,
+                "HTTP session must exist after unauthenticated /oauth2/authorize");
+        org.junit.jupiter.api.Assertions.assertNotNull(
+                session.getAttribute("SPRING_SECURITY_SAVED_REQUEST"),
+                "SPRING_SECURITY_SAVED_REQUEST must be saved in session by ExceptionTranslationFilter");
+
+        // Step 3 & 4: Submit POST /login using THE SAME session.
+        // Authentication must succeed (302), and the Location header must point back
+        // to /oauth2/authorize — NOT to "/" — proving SavedRequestAwareAuthenticationSuccessHandler
+        // retrieved the saved request from the session (matchingRequestParameterName=null fix).
+        var loginResult = mockMvc.perform(post("/login")
+                        .session(session)
+                        .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                        .param("username", email)
+                        .param("password", password))
+                .andExpect(status().is3xxRedirection())
+                .andReturn();
+
+        // Step 5: The redirect target must be the original OAuth authorize URL, not "/".
+        String location = loginResult.getResponse().getHeader("Location");
+        org.junit.jupiter.api.Assertions.assertNotNull(location,
+                "Location header must be present after successful login");
+        org.junit.jupiter.api.Assertions.assertFalse(
+                "/".equals(location),
+                "Redirect after OAuth login must NOT go to '/'. " +
+                "Got: " + location + ". " +
+                "This indicates SavedRequestAwareAuthenticationSuccessHandler returned null " +
+                "for the saved request (matchingRequestParameterName guard was not disabled).");
+        org.junit.jupiter.api.Assertions.assertTrue(
+                location.contains("/oauth2/authorize"),
+                "Redirect after OAuth login must point back to /oauth2/authorize. Got: " + location);
+    }
 }

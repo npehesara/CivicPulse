@@ -107,7 +107,15 @@ public class SecurityConfig {
 
     @Bean
     public RequestCache requestCache() {
-        return new HttpSessionRequestCache();
+        HttpSessionRequestCache cache = new HttpSessionRequestCache();
+        // Spring Security 6+ defaults matchingRequestParameterName to "continue",
+        // meaning getRequest() returns null unless ?continue is present in the URL.
+        // LoginUrlAuthenticationEntryPoint does NOT append ?continue, so POST /login
+        // never carries it. Setting null restores the pre-6 behaviour: always check
+        // the session, allowing SavedRequestAwareAuthenticationSuccessHandler to
+        // retrieve the saved OAuth /oauth2/authorize request and redirect correctly.
+        cache.setMatchingRequestParameterName(null);
+        return cache;
     }
 
     /**
