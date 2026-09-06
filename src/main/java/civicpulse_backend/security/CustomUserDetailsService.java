@@ -22,10 +22,16 @@ public class CustomUserDetailsService implements UserDetailsService {
 
     @Override
     public UserDetails loadUserByUsername(String email) throws UsernameNotFoundException {
-        User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new UsernameNotFoundException("User not found with email: " + email));
+        if (email == null || email.trim().isEmpty()) {
+            throw new UsernameNotFoundException("Email cannot be empty");
+        }
 
-        boolean enabled = user.getAccountStatus() == AccountStatus.ACTIVE;
+        String normalizedEmail = email.trim().toLowerCase();
+        User user = userRepository.findByEmail(normalizedEmail)
+                .orElseThrow(() -> new UsernameNotFoundException("User not found with email: " + normalizedEmail));
+
+        boolean enabled = user.getAccountStatus() == null || user.getAccountStatus() == AccountStatus.ACTIVE;
+        String roleName = (user.getRole() != null) ? user.getRole().name() : "CITIZEN";
 
         return new org.springframework.security.core.userdetails.User(
                 user.getEmail(),
@@ -34,7 +40,7 @@ public class CustomUserDetailsService implements UserDetailsService {
                 true,
                 true,
                 true,
-                Collections.singletonList(new SimpleGrantedAuthority("ROLE_" + user.getRole().name()))
+                Collections.singletonList(new SimpleGrantedAuthority("ROLE_" + roleName))
         );
     }
 }

@@ -316,4 +316,60 @@ class OAuth2SecurityIntegrationTest {
                         .param("refresh_token", "some_token"))
                 .andExpect(status().isUnauthorized());
     }
+
+    @Test
+    @DisplayName("Form login with valid user credentials should authenticate and redirect (302)")
+    void shouldAuthenticateValidDatabaseUserViaFormLogin() throws Exception {
+        String email = "auth_valid_" + System.currentTimeMillis() + "@example.com";
+        String password = "ValidPassword123!";
+
+        mockMvc.perform(post("/api/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(String.format("{\"fullName\":\"Valid User\",\"email\":\"%s\",\"password\":\"%s\"}", email, password)))
+                .andExpect(status().isCreated());
+
+        mockMvc.perform(post("/login")
+                        .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                        .param("username", email)
+                        .param("password", password))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/"));
+    }
+
+    @Test
+    @DisplayName("Form login with case-insensitive / trimmed email should authenticate and redirect (302)")
+    void shouldAuthenticateCaseInsensitiveEmailViaFormLogin() throws Exception {
+        String email = "auth_case_" + System.currentTimeMillis() + "@example.com";
+        String password = "CasePassword123!";
+
+        mockMvc.perform(post("/api/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(String.format("{\"fullName\":\"Case User\",\"email\":\"%s\",\"password\":\"%s\"}", email, password)))
+                .andExpect(status().isCreated());
+
+        mockMvc.perform(post("/login")
+                        .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                        .param("username", "  " + email.toUpperCase() + "  ")
+                        .param("password", password))
+                .andExpect(status().is3xxRedirection());
+    }
+
+    @Test
+    @DisplayName("Form login with invalid password should fail and redirect to /login?error")
+    void shouldRejectInvalidPasswordViaFormLogin() throws Exception {
+        String email = "auth_fail_" + System.currentTimeMillis() + "@example.com";
+        String password = "RealPassword123!";
+
+        mockMvc.perform(post("/api/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(String.format("{\"fullName\":\"Fail User\",\"email\":\"%s\",\"password\":\"%s\"}", email, password)))
+                .andExpect(status().isCreated());
+
+        mockMvc.perform(post("/login")
+                        .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                        .param("username", email)
+                        .param("password", "WrongPassword!"))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/login?error"));
+    }
 }
