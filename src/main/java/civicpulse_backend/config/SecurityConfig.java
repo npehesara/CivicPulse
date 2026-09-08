@@ -118,6 +118,71 @@ public class SecurityConfig {
         return cache;
     }
 
+    @Bean
+    public org.springframework.security.web.authentication.AuthenticationSuccessHandler authenticationSuccessHandler() {
+        org.springframework.security.web.authentication.SavedRequestAwareAuthenticationSuccessHandler successHandler = 
+                new org.springframework.security.web.authentication.SavedRequestAwareAuthenticationSuccessHandler() {
+            @Override
+            public void onAuthenticationSuccess(jakarta.servlet.http.HttpServletRequest request,
+                    jakarta.servlet.http.HttpServletResponse response,
+                    Authentication authentication) throws jakarta.servlet.ServletException, java.io.IOException {
+                org.springframework.security.web.savedrequest.SavedRequest savedRequest = requestCache().getRequest(request, response);
+                if (savedRequest != null) {
+                    String redirectUrl = savedRequest.getRedirectUrl();
+                    if (redirectUrl != null && (redirectUrl.contains("prompt=login") || redirectUrl.contains("prompt%3Dlogin"))) {
+                        jakarta.servlet.http.HttpSession session = request.getSession(false);
+                        if (session != null) {
+                            session.setAttribute("PROMPT_LOGIN_SATISFIED", Boolean.TRUE);
+                        }
+                    }
+                }
+                super.onAuthenticationSuccess(request, response, authentication);
+            }
+        };
+        successHandler.setRequestCache(requestCache());
+        return successHandler;
+    }
+
+    public static class PromptLoginFilter extends org.springframework.web.filter.OncePerRequestFilter {
+        private final org.springframework.security.web.savedrequest.RequestCache requestCache;
+
+        public PromptLoginFilter(org.springframework.security.web.savedrequest.RequestCache requestCache) {
+            this.requestCache = requestCache;
+        }
+
+        @Override
+        protected void doFilterInternal(jakarta.servlet.http.HttpServletRequest request,
+                jakarta.servlet.http.HttpServletResponse response,
+                jakarta.servlet.FilterChain filterChain) throws jakarta.servlet.ServletException, java.io.IOException {
+            if (request.getRequestURI() != null && request.getRequestURI().startsWith("/oauth2/authorize")) {
+                String prompt = request.getParameter("prompt");
+                String queryString = request.getQueryString();
+                boolean isPromptLogin = (prompt != null && prompt.contains("login"))
+                        || (queryString != null && (queryString.contains("prompt=login") || queryString.contains("prompt%3Dlogin")));
+
+                if (isPromptLogin) {
+                    jakarta.servlet.http.HttpSession session = request.getSession(false);
+                    if (session != null && Boolean.TRUE.equals(session.getAttribute("PROMPT_LOGIN_SATISFIED"))) {
+                        session.removeAttribute("PROMPT_LOGIN_SATISFIED");
+                    } else {
+                        // Preserve the original OAuth authorization request before clearing context
+                        requestCache.saveRequest(request, response);
+
+                        if (session != null) {
+                            session.removeAttribute(org.springframework.security.web.context.HttpSessionSecurityContextRepository.SPRING_SECURITY_CONTEXT_KEY);
+                        }
+                        org.springframework.security.core.context.SecurityContextHolder.clearContext();
+
+                        // Redirect to /login
+                        response.sendRedirect("/login");
+                        return;
+                    }
+                }
+            }
+            filterChain.doFilter(request, response);
+        }
+    }
+
     /**
      * Spring Authorization Server Filter Chain (Priority Order 1).
      * Handles standard OAuth 2.1 protocol endpoints:
@@ -145,6 +210,7 @@ public class SecurityConfig {
                         }))
                 .authorizeHttpRequests(authorize -> authorize.anyRequest().authenticated())
                 .requestCache(cache -> cache.requestCache(requestCache()))
+                .addFilterAfter(new PromptLoginFilter(requestCache()), org.springframework.security.web.context.SecurityContextHolderFilter.class)
                 .exceptionHandling(exceptions -> exceptions
                         .defaultAuthenticationEntryPointFor(
                                 new LoginUrlAuthenticationEntryPoint("/login"),
@@ -172,7 +238,7 @@ public class SecurityConfig {
                         .requestMatchers("/oauth2/**", "/.well-known/**").permitAll()
                         .anyRequest().authenticated())
                 .requestCache(cache -> cache.requestCache(requestCache()))
-                .formLogin(Customizer.withDefaults())
+                .formLogin(form -> form.successHandler(authenticationSuccessHandler()))
                 .oauth2ResourceServer(oauth2 -> oauth2
                         .jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter()))
                         .authenticationEntryPoint(jwtAuthenticationEntryPoint))

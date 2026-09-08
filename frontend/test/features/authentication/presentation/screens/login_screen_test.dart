@@ -1,4 +1,4 @@
-import 'package:civicpulse_frontend/core/constants/app_strings.dart';
+import 'package:civicpulse_frontend/core/auth/oauth_exception.dart';
 import 'package:civicpulse_frontend/features/authentication/data/models/auth_response_model.dart';
 import 'package:civicpulse_frontend/features/authentication/data/models/login_request_model.dart';
 import 'package:civicpulse_frontend/features/authentication/data/models/register_request_model.dart';
@@ -14,6 +14,7 @@ import 'package:provider/provider.dart';
 class MockAuthRepo implements AuthRepository {
   bool oauthCalled = false;
   bool shouldSucceed = true;
+  bool shouldCancelOAuth = false;
 
   @override
   Future<UserModel?> getCurrentUser() async => null;
@@ -39,8 +40,11 @@ class MockAuthRepo implements AuthRepository {
   @override
   Future<UserModel> loginWithOAuth() async {
     oauthCalled = true;
+    if (shouldCancelOAuth) {
+      throw OAuthException.userCancelled();
+    }
     if (!shouldSucceed) {
-      throw Exception('OAuth cancelled');
+      throw OAuthException.authorizationFailed('OAuth failed');
     }
     return const UserModel(
       userId: 1,
@@ -75,48 +79,65 @@ void main() {
     GoogleFonts.config.allowRuntimeFetching = false;
   });
 
-  testWidgets('LoginScreen should display email, password, and sign in button', (tester) async {
+  Widget buildLoginScreen(AuthController controller) {
+    return MaterialApp(
+      home: ChangeNotifierProvider<AuthController>.value(
+        value: controller,
+        child: const LoginScreen(),
+      ),
+    );
+  }
+
+  testWidgets('LoginScreen should display Sign In button without email/password fields', (tester) async {
     final mockRepo = MockAuthRepo();
     final authController = AuthController(authRepository: mockRepo);
 
-    await tester.pumpWidget(
-      MaterialApp(
-        home: ChangeNotifierProvider<AuthController>.value(
-          value: authController,
-          child: const LoginScreen(),
-        ),
-      ),
-    );
+    await tester.pumpWidget(buildLoginScreen(authController));
     await tester.pump();
 
-    expect(find.text(AppStrings.loginTitle), findsOneWidget);
-    expect(find.text(AppStrings.emailLabel), findsOneWidget);
-    expect(find.text(AppStrings.passwordLabel), findsOneWidget);
-    expect(find.text(AppStrings.signInButton), findsOneWidget);
-    expect(find.text(AppStrings.registerLink), findsOneWidget);
+    // OAuth-only screen: Sign In button must be present
+    expect(find.text('Sign In'), findsOneWidget);
+
+    // Register link must still be present
+    expect(find.text('Register'), findsOneWidget);
+
+    // Email and password fields must NOT be present — they are never used
+    expect(find.byType(TextField), findsNothing);
+    expect(find.byType(TextFormField), findsNothing);
   });
 
-  testWidgets('Tapping sign in button should trigger OAuth login flow and handle cancellation/failure cleanly', (tester) async {
+  testWidgets('Tapping Sign In triggers loginWithOAuth and not legacy email/password login', (tester) async {
     final mockRepo = MockAuthRepo();
-    mockRepo.shouldSucceed = false; // Stay on screen to verify UI state
+    mockRepo.shouldCancelOAuth = true; // User cancels — stay on screen
     final authController = AuthController(authRepository: mockRepo);
 
-    await tester.pumpWidget(
-      MaterialApp(
-        home: ChangeNotifierProvider<AuthController>.value(
-          value: authController,
-          child: const LoginScreen(),
-        ),
-      ),
-    );
+    await tester.pumpWidget(buildLoginScreen(authController));
     await tester.pump();
 
-    // Tap sign in button to trigger OAuth flow
-    await tester.tap(find.text(AppStrings.signInButton));
+    await tester.tap(find.text('Sign In'));
+    await tester.pumpAndSettle();
+
+    // OAuth flow must have been called
+    expect(mockRepo.oauthCalled, isTrue);
+
+    // After user cancellation, status is unauthenticated (no error message shown)
+    expect(authController.status, AuthStatus.unauthenticated);
+    expect(authController.errorMessage, isNull);
+  });
+
+  testWidgets('OAuth failure shows error banner on LoginScreen', (tester) async {
+    final mockRepo = MockAuthRepo();
+    mockRepo.shouldSucceed = false;
+    final authController = AuthController(authRepository: mockRepo);
+
+    await tester.pumpWidget(buildLoginScreen(authController));
+    await tester.pump();
+
+    await tester.tap(find.text('Sign In'));
     await tester.pumpAndSettle();
 
     expect(mockRepo.oauthCalled, isTrue);
     expect(authController.status, AuthStatus.error);
-    expect(find.text('Unable to sign in with OAuth. Please try again.'), findsOneWidget);
+    expect(find.text('Authorization failed. Please try again.'), findsOneWidget);
   });
 }

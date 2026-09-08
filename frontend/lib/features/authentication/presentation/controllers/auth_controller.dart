@@ -62,13 +62,23 @@ class AuthController extends ChangeNotifier {
     _validationErrors = null;
     notifyListeners();
 
+    if (kDebugMode) {
+      debugPrint('[AuthController] loginWithOAuth: initiating OAuth flow');
+    }
+
     try {
       final user = await authRepository.loginWithOAuth();
       _currentUser = user;
       _status = AuthStatus.authenticated;
+      if (kDebugMode) {
+        debugPrint('[AuthController] loginWithOAuth: successfully authenticated user ${user.email} (userId: ${user.userId})');
+      }
       notifyListeners();
       return true;
     } on OAuthException catch (e) {
+      if (kDebugMode) {
+        debugPrint('[AuthController] loginWithOAuth OAuthException: ${e.message} (isUserCancelled: ${e.isUserCancelled})');
+      }
       if (e.isUserCancelled) {
         _status = AuthStatus.unauthenticated;
         _errorMessage = null;
@@ -79,12 +89,18 @@ class AuthController extends ChangeNotifier {
       notifyListeners();
       return false;
     } on ApiException catch (e) {
+      if (kDebugMode) {
+        debugPrint('[AuthController] loginWithOAuth ApiException: ${e.message}');
+      }
       _status = AuthStatus.error;
       _errorMessage = e.message;
       _validationErrors = e.validationErrors;
       notifyListeners();
       return false;
     } catch (e) {
+      if (kDebugMode) {
+        debugPrint('[AuthController] loginWithOAuth unexpected error: $e');
+      }
       _status = AuthStatus.error;
       _errorMessage = 'Unable to sign in with OAuth. Please try again.';
       notifyListeners();
@@ -156,12 +172,18 @@ class AuthController extends ChangeNotifier {
   }
 
   Future<void> logout() async {
+    if (kDebugMode) {
+      debugPrint('[AuthController] logout: starting logout process');
+    }
     _status = AuthStatus.loading;
     notifyListeners();
 
     await authRepository.logout();
     _currentUser = null;
     _status = AuthStatus.unauthenticated;
+    if (kDebugMode) {
+      debugPrint('[AuthController] logout: completed logout, user is unauthenticated');
+    }
     notifyListeners();
   }
 }

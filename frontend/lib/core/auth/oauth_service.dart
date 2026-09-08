@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_appauth/flutter_appauth.dart';
 import '../constants/api_constants.dart';
@@ -44,20 +45,49 @@ class OAuthService {
     Map<String, String>? additionalParameters,
   }) async {
     try {
+      final effectivePromptValues = promptValues ?? const ['login'];
+      final effectiveAdditionalParams = {
+        'prompt': 'login',
+        ...?additionalParameters,
+      };
+
+      if (kDebugMode) {
+        debugPrint('[OAuth] === AUTHORIZATION REQUEST START ===');
+        debugPrint('[OAuth] Client ID: $_clientId');
+        debugPrint('[OAuth] Redirect URI: $_redirectUrl');
+        debugPrint('[OAuth] Authorization Endpoint: ${ApiConstants.oauthAuthorizationEndpoint}');
+        debugPrint('[OAuth] Scopes: $_scopes');
+        debugPrint('[OAuth] promptValues: $effectivePromptValues');
+        debugPrint('[OAuth] additionalParameters: $effectiveAdditionalParams');
+        debugPrint(
+            '[OAuth] Generated Authorization URL params: client_id=$_clientId&redirect_uri=$_redirectUrl&response_type=code&scope=${_scopes.join("+")}&prompt=login');
+      }
+
       final AuthorizationTokenRequest request = AuthorizationTokenRequest(
         _clientId,
         _redirectUrl,
-        discoveryUrl: discoveryUrl,
+        serviceConfiguration: AuthorizationServiceConfiguration(
+          authorizationEndpoint: ApiConstants.oauthAuthorizationEndpoint,
+          tokenEndpoint: ApiConstants.oauthTokenEndpoint,
+        ),
         scopes: _scopes,
-        promptValues: promptValues,
-        additionalParameters: additionalParameters,
+        promptValues: effectivePromptValues,
+        additionalParameters: effectiveAdditionalParams,
       );
 
       final AuthorizationTokenResponse? response =
           await _appAuth.authorizeAndExchangeCode(request);
 
       if (response == null || response.accessToken == null) {
+        if (kDebugMode) {
+          debugPrint('[OAuth] Authorization response was null or missing access token (user cancelled)');
+        }
         throw OAuthException.userCancelled();
+      }
+
+      if (kDebugMode) {
+        debugPrint(
+            '[OAuth] Authorization successful! (hasAccessToken: true, hasRefreshToken: ${response.refreshToken != null}, hasIdToken: ${response.idToken != null})');
       }
 
       final session = OAuthSession(
@@ -74,6 +104,9 @@ class OAuthService {
 
       return session;
     } on PlatformException catch (e) {
+      if (kDebugMode) {
+        debugPrint('[OAuth] PlatformException during authorization: code=${e.code}, message=${e.message}');
+      }
       if (e.code == 'authorize_and_exchange_code_failed' &&
           (e.message?.contains('cancelled') == true ||
               e.message?.contains('canceled') == true ||
@@ -82,10 +115,16 @@ class OAuthService {
       }
       throw OAuthException.authorizationFailed(e.message);
     } on SocketException catch (e) {
+      if (kDebugMode) {
+        debugPrint('[OAuth] SocketException during authorization: ${e.message}');
+      }
       throw OAuthException.networkError(e.message);
     } on OAuthException {
       rethrow;
     } catch (e) {
+      if (kDebugMode) {
+        debugPrint('[OAuth] Unexpected exception during authorization: $e');
+      }
       throw OAuthException.authorizationFailed(e.toString());
     }
   }
@@ -121,7 +160,10 @@ class OAuthService {
       final TokenRequest request = TokenRequest(
         _clientId,
         _redirectUrl,
-        discoveryUrl: discoveryUrl,
+        serviceConfiguration: AuthorizationServiceConfiguration(
+          authorizationEndpoint: ApiConstants.oauthAuthorizationEndpoint,
+          tokenEndpoint: ApiConstants.oauthTokenEndpoint,
+        ),
         refreshToken: currentRefreshToken,
         scopes: _scopes,
         grantType: GrantType.refreshToken,

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../auth/oauth_session.dart';
@@ -303,6 +304,11 @@ class SessionManager {
   }
 
   /// Checks if the user is considered logged in.
+  ///
+  /// Returns true if any of the following exist:
+  /// - A valid (non-expired) OAuth access token
+  /// - An OAuth refresh token (session can be silently restored)
+  /// - A legacy JWT token (backward compatibility with pre-OAuth login)
   Future<bool> isLoggedIn() async {
     final hasValidToken = await hasValidAccessToken();
     if (hasValidToken) return true;
@@ -316,6 +322,9 @@ class SessionManager {
 
   /// Clears all local OAuth credentials, legacy tokens, and cached user profile.
   Future<void> clearSession() async {
+    if (kDebugMode) {
+      debugPrint('[SessionManager] clearSession: clearing local in-memory state and secure storage tokens');
+    }
     _inMemoryOAuthSession = null;
     _inMemoryLegacyToken = null;
     _inMemoryUser = null;

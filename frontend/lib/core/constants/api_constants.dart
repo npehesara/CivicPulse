@@ -26,6 +26,8 @@ class ApiConstants {
   static const String oauthClientId = 'civicpulse-mobile-client';
   static const String oauthRedirectUrl = 'civicpulse://oauth2redirect';
   static String get oauthDiscoveryUrl => '$baseUrl/.well-known/openid-configuration';
+  static String get oauthAuthorizationEndpoint => '$baseUrl/oauth2/authorize';
+  static String get oauthTokenEndpoint => '$baseUrl/oauth2/token';
   static const List<String> oauthScopes = [
     'openid',
     'profile',

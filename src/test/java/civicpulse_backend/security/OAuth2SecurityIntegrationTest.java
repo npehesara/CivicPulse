@@ -453,4 +453,104 @@ class OAuth2SecurityIntegrationTest {
                 location.contains("/oauth2/authorize"),
                 "Redirect after OAuth login must point back to /oauth2/authorize. Got: " + location);
     }
+
+    @Test
+    @DisplayName("prompt=login forces re-authentication even with active session, enabling account switching")
+    void shouldHandlePromptLoginAndAccountSwitching() throws Exception {
+        // Register User A
+        String emailA = "user_a_" + System.currentTimeMillis() + "@example.com";
+        String passwordA = "PasswordA123!";
+        mockMvc.perform(post("/api/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(String.format(
+                                "{\"fullName\":\"User A\",\"email\":\"%s\",\"password\":\"%s\"}",
+                                emailA, passwordA)))
+                .andExpect(status().isCreated());
+
+        // 1. User A initiates OAuth and logs in to establish session
+        var authResA = mockMvc.perform(get(
+                        "/oauth2/authorize" +
+                        "?response_type=code" +
+                        "&client_id=civicpulse-mobile-client" +
+                        "&redirect_uri=http://localhost:8080/authorized" +
+                        "&scope=openid" +
+                        "&state=state-a1" +
+                        "&code_challenge=E9Melhoa2OwvFrGMTJguCH5rtx64ZWqiJ61Z35NY-yo" +
+                        "&code_challenge_method=S256")
+                        .accept(MediaType.TEXT_HTML))
+                .andExpect(status().is3xxRedirection())
+                .andReturn();
+        var session = (org.springframework.mock.web.MockHttpSession) authResA.getRequest().getSession(false);
+
+        // Form login as User A
+        mockMvc.perform(post("/login")
+                        .session(session)
+                        .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                        .param("username", emailA)
+                        .param("password", passwordA))
+                .andExpect(status().is3xxRedirection());
+
+        // Follow redirect to authorize -> obtains code for User A
+        mockMvc.perform(get(
+                        "/oauth2/authorize" +
+                        "?response_type=code" +
+                        "&client_id=civicpulse-mobile-client" +
+                        "&redirect_uri=http://localhost:8080/authorized" +
+                        "&scope=openid" +
+                        "&state=state-a1" +
+                        "&code_challenge=E9Melhoa2OwvFrGMTJguCH5rtx64ZWqiJ61Z35NY-yo" +
+                        "&code_challenge_method=S256")
+                        .session(session)
+                        .accept(MediaType.TEXT_HTML))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(header().string("Location", org.hamcrest.Matchers.containsString("code=")));
+
+        // 2. User A logs out in mobile app and taps Sign In.
+        // A new authorization request arrives with prompt=login on the active session.
+        // It MUST NOT reuse User A's session; it must redirect to /login (302).
+        var promptLoginRes = mockMvc.perform(get(
+                        "/oauth2/authorize" +
+                        "?response_type=code" +
+                        "&client_id=civicpulse-mobile-client" +
+                        "&redirect_uri=http://localhost:8080/authorized" +
+                        "&scope=openid" +
+                        "&state=state-b1" +
+                        "&code_challenge=E9Melhoa2OwvFrGMTJguCH5rtx64ZWqiJ61Z35NY-yo" +
+                        "&code_challenge_method=S256" +
+                        "&prompt=login")
+                        .session(session)
+                        .accept(MediaType.TEXT_HTML))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(header().string("Location", org.hamcrest.Matchers.endsWith("/login")))
+                .andReturn();
+
+        // 3. Register User B and log in with User B credentials on this session
+        String emailB = "user_b_" + System.currentTimeMillis() + "@example.com";
+        String passwordB = "PasswordB123!";
+        mockMvc.perform(post("/api/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(String.format(
+                                "{\"fullName\":\"User B\",\"email\":\"%s\",\"password\":\"%s\"}",
+                                emailB, passwordB)))
+                .andExpect(status().isCreated());
+
+        var loginBRes = mockMvc.perform(post("/login")
+                        .session(session)
+                        .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                        .param("username", emailB)
+                        .param("password", passwordB))
+                .andExpect(status().is3xxRedirection())
+                .andReturn();
+
+        String locB = loginBRes.getResponse().getHeader("Location");
+        org.junit.jupiter.api.Assertions.assertNotNull(locB);
+        org.junit.jupiter.api.Assertions.assertTrue(locB.contains("/oauth2/authorize"));
+
+        // 4. Follow redirect to /oauth2/authorize?...prompt=login with User B session -> obtains code for User B
+        mockMvc.perform(get(locB)
+                        .session(session)
+                        .accept(MediaType.TEXT_HTML))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(header().string("Location", org.hamcrest.Matchers.containsString("code=")));
+    }
 }
