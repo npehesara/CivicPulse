@@ -120,27 +120,34 @@ public class SecurityConfig {
 
     @Bean
     public org.springframework.security.web.authentication.AuthenticationSuccessHandler authenticationSuccessHandler() {
-        org.springframework.security.web.authentication.SavedRequestAwareAuthenticationSuccessHandler successHandler = 
-                new org.springframework.security.web.authentication.SavedRequestAwareAuthenticationSuccessHandler() {
-            @Override
-            public void onAuthenticationSuccess(jakarta.servlet.http.HttpServletRequest request,
-                    jakarta.servlet.http.HttpServletResponse response,
-                    Authentication authentication) throws jakarta.servlet.ServletException, java.io.IOException {
-                org.springframework.security.web.savedrequest.SavedRequest savedRequest = requestCache().getRequest(request, response);
-                if (savedRequest != null) {
-                    String redirectUrl = savedRequest.getRedirectUrl();
+        return (request, response, authentication) -> {
+            org.springframework.security.web.savedrequest.SavedRequest savedRequest = requestCache().getRequest(request, response);
+            if (savedRequest == null) {
+                jakarta.servlet.http.HttpSession session = request.getSession(false);
+                if (session != null) {
+                    savedRequest = (org.springframework.security.web.savedrequest.SavedRequest) 
+                            session.getAttribute("SPRING_SECURITY_SAVED_REQUEST");
+                }
+            }
+
+            if (savedRequest != null) {
+                String redirectUrl = savedRequest.getRedirectUrl();
+                requestCache().removeRequest(request, response);
+                jakarta.servlet.http.HttpSession session = request.getSession(false);
+                if (session != null) {
+                    session.removeAttribute("SPRING_SECURITY_SAVED_REQUEST");
                     if (redirectUrl != null && (redirectUrl.contains("prompt=login") || redirectUrl.contains("prompt%3Dlogin"))) {
-                        jakarta.servlet.http.HttpSession session = request.getSession(false);
-                        if (session != null) {
-                            session.setAttribute("PROMPT_LOGIN_SATISFIED", Boolean.TRUE);
-                        }
+                        session.setAttribute("PROMPT_LOGIN_SATISFIED", Boolean.TRUE);
                     }
                 }
-                super.onAuthenticationSuccess(request, response, authentication);
+                if (redirectUrl != null) {
+                    response.sendRedirect(redirectUrl);
+                    return;
+                }
             }
+
+            response.sendRedirect("/");
         };
-        successHandler.setRequestCache(requestCache());
-        return successHandler;
     }
 
     public static class PromptLoginFilter extends org.springframework.web.filter.OncePerRequestFilter {
