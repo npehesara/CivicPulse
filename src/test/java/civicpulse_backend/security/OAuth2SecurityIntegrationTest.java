@@ -553,4 +553,16 @@ class OAuth2SecurityIntegrationTest {
                 .andExpect(status().is3xxRedirection())
                 .andExpect(header().string("Location", org.hamcrest.Matchers.containsString("code=")));
     }
+
+    @Test
+    @DisplayName("GET /login renders custom CivicPulse branded login page")
+    void shouldRenderCustomCivicPulseLoginPage() throws Exception {
+        mockMvc.perform(get("/login").accept(MediaType.TEXT_HTML))
+                .andExpect(status().isOk())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.TEXT_HTML))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("Welcome to CivicPulse")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("action=\"/login\"")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("name=\"username\"")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("name=\"password\"")));
+    }
 }

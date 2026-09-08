@@ -46,10 +46,10 @@ class OAuthService {
   }) async {
     try {
       final effectivePromptValues = promptValues ?? const ['login'];
-      final effectiveAdditionalParams = {
-        'prompt': 'login',
-        ...?additionalParameters,
-      };
+      final Map<String, String>? effectiveAdditionalParams =
+          additionalParameters != null
+              ? (Map<String, String>.from(additionalParameters)..remove('prompt'))
+              : null;
 
       if (kDebugMode) {
         debugPrint('[OAuth] === AUTHORIZATION REQUEST START ===');
@@ -60,7 +60,7 @@ class OAuthService {
         debugPrint('[OAuth] promptValues: $effectivePromptValues');
         debugPrint('[OAuth] additionalParameters: $effectiveAdditionalParams');
         debugPrint(
-            '[OAuth] Generated Authorization URL params: client_id=$_clientId&redirect_uri=$_redirectUrl&response_type=code&scope=${_scopes.join("+")}&prompt=login');
+            '[OAuth] Generated Authorization URL params: client_id=$_clientId&redirect_uri=$_redirectUrl&response_type=code&scope=${_scopes.join("+")}&prompt=${effectivePromptValues.join("+")}');
       }
 
       final AuthorizationTokenRequest request = AuthorizationTokenRequest(

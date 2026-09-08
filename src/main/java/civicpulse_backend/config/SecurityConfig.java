@@ -234,11 +234,15 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.POST, "/api/auth/register", "/api/auth/login").permitAll()
                         .requestMatchers("/api/auth/**").permitAll()
+                        .requestMatchers("/login").permitAll()
                         .requestMatchers("/error").permitAll()
                         .requestMatchers("/oauth2/**", "/.well-known/**").permitAll()
                         .anyRequest().authenticated())
                 .requestCache(cache -> cache.requestCache(requestCache()))
-                .formLogin(form -> form.successHandler(authenticationSuccessHandler()))
+                .formLogin(form -> form
+                        .loginPage("/login")
+                        .permitAll()
+                        .successHandler(authenticationSuccessHandler()))
                 .oauth2ResourceServer(oauth2 -> oauth2
                         .jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter()))
                         .authenticationEntryPoint(jwtAuthenticationEntryPoint))
