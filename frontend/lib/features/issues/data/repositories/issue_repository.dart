@@ -23,6 +23,14 @@ abstract class IssueRepository {
     String sortDir = 'desc',
   });
 
+  Future<List<IssueModel>> getNearbyIssues({
+    required double latitude,
+    required double longitude,
+    double radiusKm = 15.0,
+    int page = 0,
+    int size = 20,
+  });
+
   Future<IssueModel> getIssueById(int id);
   Future<IssueModel> createIssue(Map<String, dynamic> body);
   Future<IssueModel> updateIssue(int id, Map<String, dynamic> body);
@@ -75,6 +83,23 @@ class IssueRepositoryImpl implements IssueRepository {
       size: size,
       sortBy: sortBy,
       sortDir: sortDir,
+    );
+  }
+
+  @override
+  Future<List<IssueModel>> getNearbyIssues({
+    required double latitude,
+    required double longitude,
+    double radiusKm = 15.0,
+    int page = 0,
+    int size = 20,
+  }) {
+    return apiService.getNearbyIssues(
+      latitude: latitude,
+      longitude: longitude,
+      radiusKm: radiusKm,
+      page: page,
+      size: size,
     );
   }
 

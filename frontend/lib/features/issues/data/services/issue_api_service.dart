@@ -57,6 +57,35 @@ class IssueApiService {
     return [];
   }
 
+  Future<List<IssueModel>> getNearbyIssues({
+    required double latitude,
+    required double longitude,
+    double radiusKm = 15.0,
+    int page = 0,
+    int size = 20,
+  }) async {
+    final params = <String, dynamic>{
+      'latitude': latitude,
+      'longitude': longitude,
+      'radiusKm': radiusKm,
+      'page': page,
+      'size': size,
+    };
+
+    final response = await apiClient.get(
+      '${ApiConstants.issuesEndpoint}/nearby',
+      queryParameters: params,
+    );
+
+    if (response is Map<String, dynamic> && response.containsKey('content')) {
+      final List content = response['content'] as List;
+      return content.map((json) => IssueModel.fromJson(json as Map<String, dynamic>)).toList();
+    } else if (response is List) {
+      return response.map((json) => IssueModel.fromJson(json as Map<String, dynamic>)).toList();
+    }
+    return [];
+  }
+
   Future<IssueModel> getIssueById(int id) async {
     final response = await apiClient.get(ApiConstants.issueDetailEndpoint(id));
     final issue = IssueModel.fromJson(response as Map<String, dynamic>);

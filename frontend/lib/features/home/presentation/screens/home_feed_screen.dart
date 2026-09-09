@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:provider/provider.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_strings.dart';
@@ -213,7 +214,7 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
                           label: 'Nearby',
                           icon: Icons.near_me_outlined,
                           isSelected: issueController.selectedTab == FeedTab.nearby,
-                          onTap: () => issueController.setTab(FeedTab.nearby, currentUser: currentUser),
+                          onTap: () => _onNearbyTabTapped(context, issueController, currentUser),
                         ),
                         const SizedBox(width: 8),
                         _buildFilterTab(
@@ -642,5 +643,46 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
         ),
       ),
     );
+  }
+
+  Future<void> _onNearbyTabTapped(BuildContext context, IssueController issueController, UserModel? currentUser) async {
+    try {
+      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text('Please enable location services on your device to view nearby issues.'),
+              action: SnackBarAction(label: 'Settings', onPressed: Geolocator.openLocationSettings),
+            ),
+          );
+        }
+        await issueController.setTab(FeedTab.nearby, currentUser: currentUser);
+        return;
+      }
+
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+
+      if (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Location permission is needed to show issues near your current location.')),
+          );
+        }
+        await issueController.setTab(FeedTab.nearby, currentUser: currentUser);
+        return;
+      }
+
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(accuracy: LocationAccuracy.medium, timeLimit: Duration(seconds: 6)),
+      );
+      issueController.setNearbyCoordinates(position.latitude, position.longitude);
+      await issueController.setTab(FeedTab.nearby, currentUser: currentUser);
+    } catch (_) {
+      await issueController.setTab(FeedTab.nearby, currentUser: currentUser);
+    }
   }
 }

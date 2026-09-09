@@ -57,8 +57,13 @@ public class AuthService {
             throw new DuplicateEmailException("Email is already registered: " + normalizedEmail);
         }
 
-        Territory territory = territoryRepository.findById(request.getRegisteredTerritoryId())
-                .orElseThrow(() -> new ResourceNotFoundException("Territory not found with id: " + request.getRegisteredTerritoryId()));
+        Long territoryId = request.getTerritoryId() != null ? request.getTerritoryId() : request.getRegisteredTerritoryId();
+        if (territoryId == null) {
+            throw new IllegalArgumentException("Territory or home location is required for registration");
+        }
+
+        Territory territory = territoryRepository.findById(territoryId)
+                .orElseThrow(() -> new ResourceNotFoundException("Territory not found with id: " + territoryId));
 
         CloudinaryUploadResult uploadResult = null;
         if (profileImage != null && !profileImage.isEmpty()) {
@@ -75,7 +80,9 @@ public class AuthService {
         user.setRole(Role.CITIZEN);
         user.setAccountStatus(AccountStatus.ACTIVE);
         user.setProfileImage(uploadResult != null ? uploadResult.secureUrl() : null);
-        user.setRegisteredTerritoryId(territory.getTerritoryId());
+        user.setHomeLatitude(request.getHomeLatitude());
+        user.setHomeLongitude(request.getHomeLongitude());
+        user.setTerritoryId(territory.getTerritoryId());
         user.setCreatedAt(LocalDateTime.now());
 
         User savedUser;

@@ -35,8 +35,14 @@ public class User {
     @Column(name = "account_status", nullable = false)
     private AccountStatus accountStatus;
 
-    @Column(name = "registered_territory_id")
-    private Long registeredTerritoryId;
+    @Column(name = "home_latitude")
+    private Double homeLatitude;
+
+    @Column(name = "home_longitude")
+    private Double homeLongitude;
+
+    @Column(name = "territory_id")
+    private Long territoryId;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
@@ -125,12 +131,38 @@ public class User {
         this.profileImage = profileImage;
     }
 
-    public Long getRegisteredTerritoryId() {
-        return registeredTerritoryId;
+    public Double getHomeLatitude() {
+        return homeLatitude;
     }
 
+    public void setHomeLatitude(Double homeLatitude) {
+        this.homeLatitude = homeLatitude;
+    }
+
+    public Double getHomeLongitude() {
+        return homeLongitude;
+    }
+
+    public void setHomeLongitude(Double homeLongitude) {
+        this.homeLongitude = homeLongitude;
+    }
+
+    public Long getTerritoryId() {
+        return territoryId;
+    }
+
+    public void setTerritoryId(Long territoryId) {
+        this.territoryId = territoryId;
+    }
+
+    @Deprecated
+    public Long getRegisteredTerritoryId() {
+        return territoryId;
+    }
+
+    @Deprecated
     public void setRegisteredTerritoryId(Long registeredTerritoryId) {
-        this.registeredTerritoryId = registeredTerritoryId;
+        this.territoryId = registeredTerritoryId;
     }
 
     public AccountStatus getAccountStatus() {

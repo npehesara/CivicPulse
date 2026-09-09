@@ -16,7 +16,28 @@ public class LoginViewController {
     @ResponseBody
     public String renderLoginPage(
             @RequestParam(value = "error", required = false) String error,
-            @RequestParam(value = "logout", required = false) String logout) {
+            @RequestParam(value = "logout", required = false) String logout,
+            @RequestParam(value = "return_to", required = false) String returnTo,
+            jakarta.servlet.http.HttpServletRequest request) {
+
+        String effectiveReturnTo = returnTo;
+        if (effectiveReturnTo == null || effectiveReturnTo.isBlank()) {
+            jakarta.servlet.http.HttpSession session = request.getSession(false);
+            if (session != null) {
+                effectiveReturnTo = (String) session.getAttribute("OAUTH_AUTHORIZATION_REQUEST_URL");
+                if (effectiveReturnTo == null) {
+                    org.springframework.security.web.savedrequest.SavedRequest savedReq =
+                            (org.springframework.security.web.savedrequest.SavedRequest) session.getAttribute("SPRING_SECURITY_SAVED_REQUEST");
+                    if (savedReq != null) {
+                        effectiveReturnTo = savedReq.getRedirectUrl();
+                    }
+                }
+            }
+        }
+
+        String returnToField = (effectiveReturnTo != null && effectiveReturnTo.contains("/oauth2/authorize"))
+                ? "<input type=\"hidden\" name=\"return_to\" value=\"" + org.springframework.web.util.HtmlUtils.htmlEscape(effectiveReturnTo) + "\" />\n"
+                : "";
 
         String errorBanner = (error != null) ? """
             <div class="alert alert-error" role="alert">
@@ -222,6 +243,7 @@ public class LoginViewController {
                     """ + errorBanner + logoutBanner + """
 
                     <form method="post" action="/login">
+                        """ + returnToField + """
                         <div class="form-group">
                             <label class="form-label" for="username">Email Address</label>
                             <input class="form-input" type="email" id="username" name="username" placeholder="name@example.com" required autofocus autocomplete="username" />

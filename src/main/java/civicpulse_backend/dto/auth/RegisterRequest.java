@@ -23,8 +23,13 @@ public class RegisterRequest {
     @Size(max = 20, message = "Phone number must not exceed 20 characters")
     private String phoneNumber;
 
-    @NotNull(message = "Registered territory is required")
     private Long registeredTerritoryId;
+
+    private Long territoryId;
+
+    private Double homeLatitude;
+
+    private Double homeLongitude;
 
     public RegisterRequest() {
     }
@@ -42,6 +47,18 @@ public class RegisterRequest {
         this.password = password;
         this.phoneNumber = phoneNumber;
         this.registeredTerritoryId = registeredTerritoryId;
+        this.territoryId = registeredTerritoryId;
+    }
+
+    public RegisterRequest(String fullName, String email, String password, String phoneNumber, Long territoryId, Double homeLatitude, Double homeLongitude) {
+        this.fullName = fullName;
+        this.email = email;
+        this.password = password;
+        this.phoneNumber = phoneNumber;
+        this.territoryId = territoryId;
+        this.registeredTerritoryId = territoryId;
+        this.homeLatitude = homeLatitude;
+        this.homeLongitude = homeLongitude;
     }
 
     public String getFullName() {
@@ -77,10 +94,40 @@ public class RegisterRequest {
     }
 
     public Long getRegisteredTerritoryId() {
-        return registeredTerritoryId;
+        return registeredTerritoryId != null ? registeredTerritoryId : territoryId;
     }
 
     public void setRegisteredTerritoryId(Long registeredTerritoryId) {
         this.registeredTerritoryId = registeredTerritoryId;
+        if (this.territoryId == null) {
+            this.territoryId = registeredTerritoryId;
+        }
+    }
+
+    public Long getTerritoryId() {
+        return territoryId != null ? territoryId : registeredTerritoryId;
+    }
+
+    public void setTerritoryId(Long territoryId) {
+        this.territoryId = territoryId;
+        if (this.registeredTerritoryId == null) {
+            this.registeredTerritoryId = territoryId;
+        }
+    }
+
+    public Double getHomeLatitude() {
+        return homeLatitude;
+    }
+
+    public void setHomeLatitude(Double homeLatitude) {
+        this.homeLatitude = homeLatitude;
+    }
+
+    public Double getHomeLongitude() {
+        return homeLongitude;
+    }
+
+    public void setHomeLongitude(Double homeLongitude) {
+        this.homeLongitude = homeLongitude;
     }
 }

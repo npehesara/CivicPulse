@@ -294,4 +294,59 @@ public class IssueService {
 
         issueRepository.delete(issue);
     }
+
+    @Transactional(readOnly = true)
+    public Page<IssueResponse> getNearbyIssues(Double latitude, Double longitude, Double radiusKm, Pageable pageable) {
+        if (latitude == null || longitude == null) {
+            throw new IllegalArgumentException("Latitude and longitude are required for nearby issues query");
+        }
+        double radius = (radiusKm != null && radiusKm > 0) ? radiusKm : 15.0;
+
+        // Bounding box approximation for database index efficiency (~111 km per degree)
+        double latDelta = radius / 111.0;
+        double lonDelta = radius / (111.0 * Math.cos(Math.toRadians(latitude)));
+
+        Specification<Issue> spec = (root, query, cb) -> {
+            List<Predicate> predicates = new ArrayList<>();
+            predicates.add(cb.isNotNull(root.get("latitude")));
+            predicates.add(cb.isNotNull(root.get("longitude")));
+            predicates.add(cb.equal(root.get("visibility"), Visibility.PUBLIC));
+            predicates.add(cb.between(root.get("latitude"), latitude - latDelta, latitude + latDelta));
+            predicates.add(cb.between(root.get("longitude"), longitude - lonDelta, longitude + lonDelta));
+            return cb.and(predicates.toArray(new Predicate[0]));
+        };
+
+        List<Issue> candidates = issueRepository.findAll(spec);
+
+        // Exact Haversine distance calculation and sorting by proximity
+        List<IssueResponse> nearbyList = candidates.stream()
+                .filter(i -> calculateHaversineDistanceKm(latitude, longitude, i.getLatitude(), i.getLongitude()) <= radius)
+                .sorted((a, b) -> Double.compare(
+                        calculateHaversineDistanceKm(latitude, longitude, a.getLatitude(), a.getLongitude()),
+                        calculateHaversineDistanceKm(latitude, longitude, b.getLatitude(), b.getLongitude())
+                ))
+                .map(issue -> {
+                    long upvotes = upvoteRepository.countByIssue_IssueId(issue.getIssueId());
+                    long comments = commentRepository.findByIssue_IssueIdAndIsDeletedFalseOrderByCreatedAtAsc(issue.getIssueId()).size();
+                    return IssueResponse.fromEntity(issue, upvotes, comments);
+                })
+                .toList();
+
+        int start = (int) pageable.getOffset();
+        int end = Math.min(start + pageable.getPageSize(), nearbyList.size());
+        List<IssueResponse> paged = (start <= end && start < nearbyList.size()) ? nearbyList.subList(start, end) : List.of();
+
+        return new org.springframework.data.domain.PageImpl<>(paged, pageable, nearbyList.size());
+    }
+
+    private double calculateHaversineDistanceKm(double lat1, double lon1, double lat2, double lon2) {
+        final int R = 6371; // Earth radius in km
+        double dLat = Math.toRadians(lat2 - lat1);
+        double dLon = Math.toRadians(lon2 - lon1);
+        double a = Math.sin(dLat / 2) * Math.sin(dLat / 2)
+                + Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2))
+                * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+        double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        return R * c;
+    }
 }

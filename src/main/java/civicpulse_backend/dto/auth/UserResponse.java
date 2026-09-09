@@ -17,6 +17,10 @@ public class UserResponse {
     private AccountStatus accountStatus;
     private Long registeredTerritoryId;
     private String registeredTerritoryName;
+    private Long territoryId;
+    private String territoryName;
+    private Double homeLatitude;
+    private Double homeLongitude;
     private LocalDateTime createdAt;
 
     public UserResponse() {
@@ -39,6 +43,8 @@ public class UserResponse {
         this.accountStatus = accountStatus;
         this.registeredTerritoryId = registeredTerritoryId;
         this.registeredTerritoryName = registeredTerritoryName;
+        this.territoryId = registeredTerritoryId;
+        this.territoryName = registeredTerritoryName;
         this.createdAt = createdAt;
     }
 
@@ -50,7 +56,7 @@ public class UserResponse {
         if (user == null) {
             return null;
         }
-        return new UserResponse(
+        UserResponse resp = new UserResponse(
                 user.getUserId(),
                 user.getFullName(),
                 user.getEmail(),
@@ -58,10 +64,15 @@ public class UserResponse {
                 user.getProfileImage(),
                 user.getRole(),
                 user.getAccountStatus(),
-                user.getRegisteredTerritoryId(),
+                user.getTerritoryId(),
                 territoryName,
                 user.getCreatedAt()
         );
+        resp.setHomeLatitude(user.getHomeLatitude());
+        resp.setHomeLongitude(user.getHomeLongitude());
+        resp.setTerritoryId(user.getTerritoryId());
+        resp.setTerritoryName(territoryName);
+        return resp;
     }
 
     public Long getUserId() {
@@ -121,19 +132,63 @@ public class UserResponse {
     }
 
     public Long getRegisteredTerritoryId() {
-        return registeredTerritoryId;
+        return registeredTerritoryId != null ? registeredTerritoryId : territoryId;
     }
 
     public void setRegisteredTerritoryId(Long registeredTerritoryId) {
         this.registeredTerritoryId = registeredTerritoryId;
+        if (this.territoryId == null) {
+            this.territoryId = registeredTerritoryId;
+        }
     }
 
     public String getRegisteredTerritoryName() {
-        return registeredTerritoryName;
+        return registeredTerritoryName != null ? registeredTerritoryName : territoryName;
     }
 
     public void setRegisteredTerritoryName(String registeredTerritoryName) {
         this.registeredTerritoryName = registeredTerritoryName;
+        if (this.territoryName == null) {
+            this.territoryName = registeredTerritoryName;
+        }
+    }
+
+    public Long getTerritoryId() {
+        return territoryId != null ? territoryId : registeredTerritoryId;
+    }
+
+    public void setTerritoryId(Long territoryId) {
+        this.territoryId = territoryId;
+        if (this.registeredTerritoryId == null) {
+            this.registeredTerritoryId = territoryId;
+        }
+    }
+
+    public String getTerritoryName() {
+        return territoryName != null ? territoryName : registeredTerritoryName;
+    }
+
+    public void setTerritoryName(String territoryName) {
+        this.territoryName = territoryName;
+        if (this.registeredTerritoryName == null) {
+            this.registeredTerritoryName = territoryName;
+        }
+    }
+
+    public Double getHomeLatitude() {
+        return homeLatitude;
+    }
+
+    public void setHomeLatitude(Double homeLatitude) {
+        this.homeLatitude = homeLatitude;
+    }
+
+    public Double getHomeLongitude() {
+        return homeLongitude;
+    }
+
+    public void setHomeLongitude(Double homeLongitude) {
+        this.homeLongitude = homeLongitude;
     }
 
     public LocalDateTime getCreatedAt() {

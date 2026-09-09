@@ -130,20 +130,43 @@ public class SecurityConfig {
                 }
             }
 
+            String redirectUrl = null;
             if (savedRequest != null) {
-                String redirectUrl = savedRequest.getRedirectUrl();
+                redirectUrl = savedRequest.getRedirectUrl();
                 requestCache().removeRequest(request, response);
-                jakarta.servlet.http.HttpSession session = request.getSession(false);
+            }
+
+            jakarta.servlet.http.HttpSession session = request.getSession(false);
+            if (session != null) {
+                session.removeAttribute("SPRING_SECURITY_SAVED_REQUEST");
+                if (redirectUrl == null || redirectUrl.equals("/") || redirectUrl.isBlank()) {
+                    redirectUrl = (String) session.getAttribute("OAUTH_AUTHORIZATION_REQUEST_URL");
+                }
+            }
+
+            if (redirectUrl == null || redirectUrl.equals("/") || redirectUrl.isBlank()) {
+                String returnTo = request.getParameter("return_to");
+                if (returnTo != null && returnTo.contains("/oauth2/authorize")) {
+                    redirectUrl = returnTo;
+                }
+            }
+
+            if (redirectUrl != null && redirectUrl.contains("/oauth2/authorize")) {
                 if (session != null) {
-                    session.removeAttribute("SPRING_SECURITY_SAVED_REQUEST");
-                    if (redirectUrl != null && (redirectUrl.contains("prompt=login") || redirectUrl.contains("prompt%3Dlogin"))) {
+                    session.removeAttribute("OAUTH_AUTHORIZATION_REQUEST_URL");
+                    if (redirectUrl.contains("prompt=login") || redirectUrl.contains("prompt%3Dlogin")) {
                         session.setAttribute("PROMPT_LOGIN_SATISFIED", Boolean.TRUE);
                     }
                 }
-                if (redirectUrl != null) {
-                    response.sendRedirect(redirectUrl);
-                    return;
-                }
+                // Normalize to relative path to prevent reverse-proxy host/scheme/port leaks
+                String relativeUrl = redirectUrl.substring(redirectUrl.indexOf("/oauth2/authorize"));
+                response.sendRedirect(relativeUrl);
+                return;
+            }
+
+            if (redirectUrl != null && !redirectUrl.equals("/")) {
+                response.sendRedirect(redirectUrl);
+                return;
             }
 
             response.sendRedirect("/");
@@ -174,6 +197,10 @@ public class SecurityConfig {
                     } else {
                         // Preserve the original OAuth authorization request before clearing context
                         requestCache.saveRequest(request, response);
+
+                        String authUrl = request.getRequestURI() + (queryString != null ? "?" + queryString : "");
+                        jakarta.servlet.http.HttpSession currentSession = request.getSession(true);
+                        currentSession.setAttribute("OAUTH_AUTHORIZATION_REQUEST_URL", authUrl);
 
                         if (session != null) {
                             session.removeAttribute(org.springframework.security.web.context.HttpSessionSecurityContextRepository.SPRING_SECURITY_CONTEXT_KEY);

@@ -29,6 +29,8 @@ class IssueController extends ChangeNotifier {
   int? _selectedStatusId;
   String? _selectedSeverity;
   String? _searchKeyword;
+  double? _nearbyLatitude;
+  double? _nearbyLongitude;
 
   List<IssueModel> get issues => _issues;
   List<CategoryModel> get categories => _categories;
@@ -45,6 +47,13 @@ class IssueController extends ChangeNotifier {
   int? get selectedStatusId => _selectedStatusId;
   String? get selectedSeverity => _selectedSeverity;
   String? get searchKeyword => _searchKeyword;
+  double? get nearbyLatitude => _nearbyLatitude;
+  double? get nearbyLongitude => _nearbyLongitude;
+
+  void setNearbyCoordinates(double lat, double lon) {
+    _nearbyLatitude = lat;
+    _nearbyLongitude = lon;
+  }
 
   Future<void> init(UserModel? currentUser) async {
     await loadFilterMetadata();
@@ -112,6 +121,21 @@ class IssueController extends ChangeNotifier {
 
       if (_selectedTab == FeedTab.territory && currentUser?.registeredTerritoryId != null) {
         effectiveTerritoryId = currentUser!.registeredTerritoryId;
+      }
+
+      if (_selectedTab == FeedTab.nearby) {
+        final lat = _nearbyLatitude ?? currentUser?.homeLatitude;
+        final lon = _nearbyLongitude ?? currentUser?.homeLongitude;
+        if (lat != null && lon != null) {
+          final nearbyIssues = await issueRepository.getNearbyIssues(
+            latitude: lat,
+            longitude: lon,
+            radiusKm: 15.0,
+            size: 50,
+          );
+          _issues = nearbyIssues;
+          return;
+        }
       }
 
       final fetchedIssues = await issueRepository.getIssues(

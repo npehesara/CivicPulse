@@ -52,6 +52,19 @@ public class IssueController {
         return ResponseEntity.ok(response);
     }
 
+    @GetMapping("/nearby")
+    public ResponseEntity<Page<IssueResponse>> getNearbyIssues(
+            @RequestParam Double latitude,
+            @RequestParam Double longitude,
+            @RequestParam(defaultValue = "15.0") Double radiusKm,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size
+    ) {
+        Pageable pageable = PageRequest.of(page, size);
+        Page<IssueResponse> response = issueService.getNearbyIssues(latitude, longitude, radiusKm, pageable);
+        return ResponseEntity.ok(response);
+    }
+
     @GetMapping("/{id}")
     public ResponseEntity<IssueResponse> getIssueById(@PathVariable Long id) {
         IssueResponse response = issueService.getIssueById(id);

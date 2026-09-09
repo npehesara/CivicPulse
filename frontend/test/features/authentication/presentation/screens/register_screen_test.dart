@@ -117,6 +117,26 @@ class _MockHttpClientRequest extends Fake implements HttpClientRequest {
   int contentLength = 0;
 
   @override
+  bool persistentConnection = false;
+
+  @override
+  bool bufferOutput = true;
+
+  @override
+  void add(List<int> data) {}
+
+  @override
+  Future addStream(Stream<List<int>> stream) async {
+    await stream.drain();
+  }
+
+  @override
+  void write(Object? obj) {}
+
+  @override
+  void writeln([Object? obj = '']) {}
+
+  @override
   Future<HttpClientResponse> close() async => _MockHttpClientResponse();
 }
 

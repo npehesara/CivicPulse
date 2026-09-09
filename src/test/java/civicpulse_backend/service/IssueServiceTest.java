@@ -180,4 +180,39 @@ class IssueServiceTest {
         issueService.deleteIssue(1L);
         verify(issueRepository).delete(issue);
     }
+
+    @Test
+    void shouldGetNearbyIssuesWithinRadius() {
+        Issue nearIssue = new Issue();
+        nearIssue.setIssueId(2L);
+        nearIssue.setTitle("Near Issue");
+        nearIssue.setDescription("Nearby pothole");
+        nearIssue.setLatitude(6.9275);
+        nearIssue.setLongitude(79.8615);
+        nearIssue.setUser(user);
+        nearIssue.setCategory(category);
+        nearIssue.setStatus(reportedStatus);
+        nearIssue.setVisibility(Visibility.PUBLIC);
+
+        Issue farIssue = new Issue();
+        farIssue.setIssueId(3L);
+        farIssue.setTitle("Far Issue");
+        farIssue.setDescription("Far away issue");
+        farIssue.setLatitude(7.2906); // Kandy (~95 km away)
+        farIssue.setLongitude(80.6337);
+        farIssue.setUser(user);
+        farIssue.setCategory(category);
+        farIssue.setStatus(reportedStatus);
+        farIssue.setVisibility(Visibility.PUBLIC);
+
+        when(issueRepository.findAll(any(Specification.class))).thenReturn(List.of(nearIssue, farIssue));
+        when(upvoteRepository.countByIssue_IssueId(2L)).thenReturn(0L);
+        when(commentRepository.findByIssue_IssueIdAndIsDeletedFalseOrderByCreatedAtAsc(2L)).thenReturn(Collections.emptyList());
+
+        Page<IssueResponse> nearby = issueService.getNearbyIssues(6.9271, 79.8612, 10.0, PageRequest.of(0, 10));
+
+        assertNotNull(nearby);
+        assertEquals(1, nearby.getTotalElements());
+        assertEquals(2L, nearby.getContent().get(0).getIssueId());
+    }
 }

@@ -175,6 +175,9 @@ class AuthController extends ChangeNotifier {
     required String password,
     String? phoneNumber,
     int? registeredTerritoryId,
+    int? territoryId,
+    double? homeLatitude,
+    double? homeLongitude,
     String? profileImagePath,
     List<int>? profileImageBytes,
     String? profileImageFilename,
@@ -185,12 +188,16 @@ class AuthController extends ChangeNotifier {
     notifyListeners();
 
     try {
+      final effectiveTerritoryId = territoryId ?? registeredTerritoryId ?? _selectedTerritoryId;
       final request = RegisterRequestModel(
         fullName: fullName,
         email: email,
         password: password,
         phoneNumber: phoneNumber,
-        registeredTerritoryId: registeredTerritoryId ?? _selectedTerritoryId,
+        registeredTerritoryId: effectiveTerritoryId,
+        territoryId: effectiveTerritoryId,
+        homeLatitude: homeLatitude,
+        homeLongitude: homeLongitude,
         profileImagePath: profileImagePath ?? _selectedProfileImagePath,
         profileImageBytes: profileImageBytes ?? _selectedProfileImageBytes,
         profileImageFilename: profileImageFilename ?? _selectedProfileImageFilename,

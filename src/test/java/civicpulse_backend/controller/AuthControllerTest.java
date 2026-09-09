@@ -137,4 +137,36 @@ class AuthControllerTest {
                 .andExpect(jsonPath("$.status").value(401))
                 .andExpect(jsonPath("$.message").value("Invalid email or password"));
     }
+
+    @Test
+    void shouldRegisterUserWithHomeLocationAndAutoTerritory() throws Exception {
+        UserResponse userResponse = new UserResponse();
+        userResponse.setUserId(2L);
+        userResponse.setFullName("Jane Citizen");
+        userResponse.setEmail("jane@example.com");
+        userResponse.setRole(Role.CITIZEN);
+        userResponse.setAccountStatus(AccountStatus.ACTIVE);
+        userResponse.setHomeLatitude(6.0535);
+        userResponse.setHomeLongitude(80.2210);
+        userResponse.setTerritoryId(7L);
+        userResponse.setTerritoryName("Galle");
+        userResponse.setCreatedAt(LocalDateTime.now());
+
+        AuthResponse authResponse = new AuthResponse("tokenGalle", "User registered successfully", userResponse);
+        when(authService.register(any(RegisterRequest.class), any())).thenReturn(authResponse);
+
+        mockMvc.perform(multipart("/api/auth/register")
+                        .param("fullName", "Jane Citizen")
+                        .param("email", "jane@example.com")
+                        .param("password", "Password123!")
+                        .param("phoneNumber", "0779876543")
+                        .param("homeLatitude", "6.0535")
+                        .param("homeLongitude", "80.2210")
+                        .param("territoryId", "7"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.user.homeLatitude").value(6.0535))
+                .andExpect(jsonPath("$.user.homeLongitude").value(80.2210))
+                .andExpect(jsonPath("$.user.territoryId").value(7))
+                .andExpect(jsonPath("$.user.territoryName").value("Galle"));
+    }
 }

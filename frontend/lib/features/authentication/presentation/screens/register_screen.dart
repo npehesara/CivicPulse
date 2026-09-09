@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'dart:io';
+import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -13,45 +15,12 @@ import '../../../../core/utils/validators.dart';
 import '../../../../core/widgets/custom_button.dart';
 import '../../../../core/widgets/custom_text_field.dart';
 import '../../../../core/widgets/error_banner.dart';
+import '../../../issues/data/models/default_territories.dart';
 import '../../../issues/data/models/territory_model.dart';
 import '../../../issues/data/repositories/issue_repository.dart';
+import '../../../issues/data/services/nominatim_service.dart';
 import '../controllers/auth_controller.dart';
 import '../widgets/password_field.dart';
-
-/// Predefined approximate centroid coordinates for known Sri Lankan administrative territories.
-const Map<String, LatLng> _knownTerritoryCentroids = {
-  'colombo': LatLng(6.9271, 79.8612),
-  'dehiwala': LatLng(6.8301, 79.8801),
-  'moratuwa': LatLng(6.7730, 79.8816),
-  'kotte': LatLng(6.8944, 79.9025),
-  'kandy': LatLng(7.2906, 80.6337),
-  'galle': LatLng(6.0535, 80.2210),
-  'matara': LatLng(5.9549, 80.5550),
-  'balapitiya': LatLng(6.2730, 80.0410),
-  'hambantota': LatLng(6.1429, 81.1212),
-  'jaffna': LatLng(9.6615, 80.0255),
-  'kilinochchi': LatLng(9.3803, 80.3770),
-  'mannar': LatLng(8.9810, 79.9044),
-  'vavuniya': LatLng(8.7542, 80.4982),
-  'mullaitivu': LatLng(9.2671, 80.8143),
-  'batticaloa': LatLng(7.7310, 81.6747),
-  'ampara': LatLng(7.2912, 81.6724),
-  'trincomalee': LatLng(8.5874, 81.2152),
-  'kurunegala': LatLng(7.4818, 80.3609),
-  'puttalam': LatLng(8.0408, 79.8394),
-  'anuradhapura': LatLng(8.3114, 80.4037),
-  'polonnaruwa': LatLng(7.9403, 81.0188),
-  'badulla': LatLng(6.9934, 81.0550),
-  'bandarawela': LatLng(6.8259, 80.9982),
-  'monaragala': LatLng(6.8728, 81.3507),
-  'ratnapura': LatLng(6.6828, 80.4034),
-  'kegalle': LatLng(7.2513, 80.3464),
-  'kalutara': LatLng(6.5854, 79.9607),
-  'negombo': LatLng(7.2008, 79.8736),
-  'gampaha': LatLng(7.0840, 79.9939),
-  'matale': LatLng(7.4675, 80.6234),
-  'nuwara eliya': LatLng(6.9497, 80.7891),
-};
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -73,13 +42,21 @@ class _RegisterScreenState extends State<RegisterScreen> {
   // Step 2: Location / Territory
   final MapController _mapController = MapController();
   final _searchController = TextEditingController();
+  final NominatimService _nominatimService = NominatimService();
+  Timer? _debounceTimer;
   List<TerritoryModel> _territories = [];
   List<TerritoryModel> _filteredTerritories = [];
+  List<NominatimPlace> _searchResults = [];
   TerritoryModel? _selectedTerritory;
   LatLng _selectedLocation = const LatLng(6.9271, 79.8612); // Colombo default
+  bool _hasSelectedHomeLocation = false;
+  String? _selectedAddressTitle;
   bool _isLoadingTerritories = true;
   bool _isLocating = false;
   bool _isSearching = false;
+  bool _isSearchLoading = false;
+  bool _hasSearchError = false;
+  Offset? _mapTapDownPosition;
 
   // Step 3: Password
   final _formKeyStep3 = GlobalKey<FormState>();
@@ -99,6 +76,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   @override
   void dispose() {
+    _debounceTimer?.cancel();
     _pageController.dispose();
     _fullNameController.dispose();
     _emailController.dispose();
@@ -116,14 +94,22 @@ class _RegisterScreenState extends State<RegisterScreen> {
       final list = await repo.getTerritories();
       if (mounted) {
         setState(() {
-          _territories = list;
-          _filteredTerritories = list;
+          if (list.isNotEmpty) {
+            _territories = list;
+          } else {
+            _territories = kSriLankanDistricts.map((t) => t.toModel()).toList();
+          }
+          _filteredTerritories = _territories;
           _isLoadingTerritories = false;
         });
       }
     } catch (_) {
       if (mounted) {
-        setState(() => _isLoadingTerritories = false);
+        setState(() {
+          _territories = kSriLankanDistricts.map((t) => t.toModel()).toList();
+          _filteredTerritories = _territories;
+          _isLoadingTerritories = false;
+        });
       }
     }
   }
@@ -154,88 +140,138 @@ class _RegisterScreenState extends State<RegisterScreen> {
   }
 
   // --- Step 2 Location Handling ---
-  LatLng _getCoordinatesForTerritory(TerritoryModel territory) {
-    final lowerName = territory.territoryName.toLowerCase();
-    for (final entry in _knownTerritoryCentroids.entries) {
-      if (lowerName.contains(entry.key)) {
-        return entry.value;
-      }
-    }
-    // Fallback to default
-    return const LatLng(6.9271, 79.8612);
-  }
-
-  void _selectTerritory(TerritoryModel territory) {
-    final coords = _getCoordinatesForTerritory(territory);
+  void _selectTerritory(TerritoryModel territory, {LatLng? customCoords}) {
+    final coords = customCoords ?? getCentroidForDistrict(territory.territoryName);
     setState(() {
       _selectedTerritory = territory;
       _selectedLocation = coords;
+      _hasSelectedHomeLocation = true;
       _isSearching = false;
+      _searchResults = [];
+      _isSearchLoading = false;
+      _hasSearchError = false;
       _searchController.text = territory.territoryName;
     });
     try {
-      _mapController.move(coords, 13.0);
+      _mapController.move(coords, 13.5);
     } catch (_) {}
   }
 
-  void _selectMapCoordinate(LatLng latLng) {
+  Future<void> _selectMapCoordinate(LatLng latLng) async {
+    debugPrint('[Step2] Manual map tapped: ${latLng.latitude}, ${latLng.longitude}');
+    final initialDistrict = findDistrictForCoordinates(latLng, _territories);
     setState(() {
       _selectedLocation = latLng;
+      _selectedTerritory = initialDistrict;
+      _hasSelectedHomeLocation = true;
     });
 
-    if (_territories.isEmpty) return;
+    try {
+      _mapController.move(latLng, _mapController.camera.zoom);
+    } catch (_) {}
 
-    // Nearest-neighbor matching against known territory centroids
-    const distance = Distance();
-    TerritoryModel? closestTerritory;
-    double minDistance = double.infinity;
-
-    for (final territory in _territories) {
-      final centroid = _getCoordinatesForTerritory(territory);
-      final dist = distance.as(LengthUnit.Kilometer, latLng, centroid);
-      if (dist < minDistance) {
-        minDistance = dist;
-        closestTerritory = territory;
+    // Reverse geocode in background to refine district from OSM official boundary
+    try {
+      final place = await _nominatimService.reverseGeocode(latLng);
+      if (place != null && mounted) {
+        final refinedDistrict = findDistrictForCoordinates(
+          latLng,
+          _territories,
+          hintDistrictName: place.resolvedDistrict ?? place.district,
+        );
+        setState(() {
+          _selectedTerritory = refinedDistrict;
+          _selectedAddressTitle = place.title;
+        });
       }
-    }
-
-    if (closestTerritory != null) {
-      final matched = closestTerritory;
-      setState(() {
-        _selectedTerritory = matched;
-        _searchController.text = matched.territoryName;
-      });
+    } catch (e) {
+      debugPrint('[Step2] Reverse geocode error: $e');
     }
   }
 
   Future<void> _handleGpsLocation() async {
+    debugPrint('[GPS] Initiating GPS location request...');
     setState(() => _isLocating = true);
+
     try {
-      LocationPermission permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
+      // 1. Check if location services are enabled
+      final isServiceEnabled = await Geolocator.isLocationServiceEnabled();
+      debugPrint('[GPS] Location services enabled: $isServiceEnabled');
+      if (!isServiceEnabled) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text('Location services are turned off. Please enable GPS on your device.'),
+              action: SnackBarAction(
+                label: 'Settings',
+                onPressed: () => Geolocator.openLocationSettings(),
+              ),
+              duration: const Duration(seconds: 5),
+            ),
+          );
+        }
+        return;
       }
 
-      if (permission == LocationPermission.always || permission == LocationPermission.whileInUse) {
-        final position = await Geolocator.getCurrentPosition(
-          locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
-        );
-        final latLng = LatLng(position.latitude, position.longitude);
-        _selectMapCoordinate(latLng);
-        try {
-          _mapController.move(latLng, 14.0);
-        } catch (_) {}
-      } else {
+      // 2. Check and request location permission
+      LocationPermission permission = await Geolocator.checkPermission();
+      debugPrint('[GPS] Initial permission status: $permission');
+
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        debugPrint('[GPS] Permission after request: $permission');
+      }
+
+      if (permission == LocationPermission.deniedForever) {
+        debugPrint('[GPS] Location permission denied forever.');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text('Location permission is permanently denied. Please grant permission in App Settings.'),
+              action: SnackBarAction(
+                label: 'App Settings',
+                onPressed: () => Geolocator.openAppSettings(),
+              ),
+              duration: const Duration(seconds: 6),
+            ),
+          );
+        }
+        return;
+      }
+
+      if (permission == LocationPermission.denied) {
+        debugPrint('[GPS] Location permission denied by user.');
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Location permission was denied.')),
           );
         }
+        return;
       }
-    } catch (_) {
+
+      // 3. Permission granted: get position
+      debugPrint('[GPS] Permission granted! Acquiring current position...');
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          timeLimit: Duration(seconds: 12),
+        ),
+      );
+
+      debugPrint('[GPS] Position acquired: ${position.latitude}, ${position.longitude}');
+      final latLng = LatLng(position.latitude, position.longitude);
+
+      if (mounted) {
+        try {
+          _mapController.move(latLng, 14.5);
+        } catch (_) {}
+        await _selectMapCoordinate(latLng);
+      }
+    } catch (e) {
+      debugPrint('[GPS] Error acquiring GPS position: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not access current GPS location.')),
+          SnackBar(content: Text('Could not access current GPS location: $e')),
         );
       }
     } finally {
@@ -244,26 +280,105 @@ class _RegisterScreenState extends State<RegisterScreen> {
   }
 
   void _onSearchChanged(String query) {
-    if (query.trim().isEmpty) {
+    _debounceTimer?.cancel();
+    final trimmed = query.trim();
+
+    if (trimmed.isEmpty) {
       setState(() {
         _filteredTerritories = _territories;
+        _searchResults = [];
         _isSearching = false;
+        _isSearchLoading = false;
+        _hasSearchError = false;
       });
-    } else {
-      final lower = query.trim().toLowerCase();
+      return;
+    }
+
+    final lower = trimmed.toLowerCase();
+    setState(() {
+      _filteredTerritories = _territories.where((t) {
+        return t.territoryName.toLowerCase().contains(lower) ||
+            (t.parentTerritoryName?.toLowerCase().contains(lower) ?? false) ||
+            (t.regionType?.toLowerCase().contains(lower) ?? false);
+      }).toList();
+      _isSearching = true;
+      _isSearchLoading = trimmed.length >= 2;
+      _hasSearchError = false;
+    });
+
+    if (trimmed.length < 2) {
       setState(() {
-        _filteredTerritories = _territories.where((t) {
-          return t.territoryName.toLowerCase().contains(lower) ||
-              (t.parentTerritoryName?.toLowerCase().contains(lower) ?? false) ||
-              (t.regionType?.toLowerCase().contains(lower) ?? false);
-        }).toList();
-        _isSearching = true;
+        _searchResults = [];
+        _isSearchLoading = false;
       });
+      return;
+    }
+
+    // Debounce Nominatim search by 600ms to respect OSM usage policy
+    _debounceTimer = Timer(const Duration(milliseconds: 600), () {
+      _performNominatimSearch(trimmed);
+    });
+  }
+
+  Future<void> _performNominatimSearch(String query) async {
+    if (!mounted) return;
+    setState(() {
+      _isSearchLoading = true;
+      _hasSearchError = false;
+    });
+
+    try {
+      final results = await _nominatimService.search(query);
+      if (mounted) {
+        setState(() {
+          _searchResults = results;
+          _isSearchLoading = false;
+          _hasSearchError = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('[Search] Nominatim search error: $e');
+      if (mounted) {
+        setState(() {
+          _isSearchLoading = false;
+          _hasSearchError = true;
+        });
+      }
     }
   }
 
+  void _selectNominatimPlace(NominatimPlace place) {
+    final latLng = place.location;
+
+    // Resolve district using OSM resolved district or bounding box
+    final matched = findDistrictForCoordinates(
+      latLng,
+      _territories,
+      hintDistrictName: place.resolvedDistrict ?? place.district,
+    );
+
+    setState(() {
+      _selectedLocation = latLng;
+      _selectedTerritory = matched;
+      _selectedAddressTitle = place.title;
+      _hasSelectedHomeLocation = true;
+      _isSearching = false;
+      _searchResults = [];
+      _isSearchLoading = false;
+      _hasSearchError = false;
+      _searchController.text = place.title;
+    });
+
+    try {
+      _mapController.move(latLng, 13.5);
+    } catch (_) {}
+  }
+
   void _handleStep2Next() {
-    if (_selectedTerritory != null) {
+    if (_hasSelectedHomeLocation || _selectedTerritory != null) {
+      if (_selectedTerritory == null) {
+        _selectedTerritory = findDistrictForCoordinates(_selectedLocation, _territories);
+      }
       _goToPage(2);
     }
   }
@@ -313,7 +428,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
     final authController = context.read<AuthController>();
     authController.clearError();
 
-    if (_selectedTerritory == null) {
+    _selectedTerritory ??= findDistrictForCoordinates(_selectedLocation, _territories);
+
+    if (!_hasSelectedHomeLocation && _selectedTerritory == null) {
       _goToPage(1);
       return;
     }
@@ -323,7 +440,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
       email: _emailController.text.trim(),
       password: _passwordController.text,
       phoneNumber: _phoneController.text.trim().isNotEmpty ? _phoneController.text.trim() : null,
-      registeredTerritoryId: _selectedTerritory!.territoryId,
+      registeredTerritoryId: _selectedTerritory?.territoryId,
+      territoryId: _selectedTerritory?.territoryId,
+      homeLatitude: _selectedLocation.latitude,
+      homeLongitude: _selectedLocation.longitude,
       profileImagePath: _selectedImage?.path,
       profileImageBytes: _selectedImageBytes,
       profileImageFilename: _selectedImage?.name,
@@ -475,8 +595,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               _buildStepHeader(
-                title: 'Select your location',
-                subtitle: 'Choose your local municipal council or territory to connect with community issues.',
+                title: 'Your Home Location',
+                subtitle: 'Select your default home location to automatically connect with your local district and community issues.',
               ),
               const SizedBox(height: 16),
 
@@ -485,7 +605,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 controller: _searchController,
                 onChanged: _onSearchChanged,
                 decoration: InputDecoration(
-                  hintText: 'Search location or council...',
+                  hintText: 'Search city, town, or address...',
                   prefixIcon: const Icon(Icons.search, color: AppColors.textMuted, size: 20),
                   suffixIcon: _searchController.text.isNotEmpty
                       ? IconButton(
@@ -513,37 +633,133 @@ class _RegisterScreenState extends State<RegisterScreen> {
               ),
 
               // Suggestions Dropdown List if searching
-              if (_isSearching && _filteredTerritories.isNotEmpty)
+              if (_isSearching)
                 Material(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(12),
                   elevation: 4,
                   child: Container(
-                    constraints: const BoxConstraints(maxHeight: 180),
+                    constraints: const BoxConstraints(maxHeight: 220),
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(color: AppColors.border),
                     ),
-                    child: ListView.separated(
-                      shrinkWrap: true,
-                      itemCount: _filteredTerritories.length,
-                      separatorBuilder: (context, index) => const Divider(height: 1, color: AppColors.divider),
-                      itemBuilder: (context, index) {
-                        final t = _filteredTerritories[index];
-                        return ListTile(
-                          dense: true,
-                          leading: const Icon(Icons.location_city, color: AppColors.primary, size: 20),
-                          title: Text(
-                            t.territoryName,
-                            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                    child: SingleChildScrollView(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          if (_isSearchLoading)
+                            const Padding(
+                              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                              child: Row(
+                                children: [
+                                  SizedBox(
+                                    width: 14,
+                                    height: 14,
+                                    child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary),
+                                  ),
+                                  SizedBox(width: 10),
+                                  Expanded(
+                                    child: Text(
+                                      'Searching places on OpenStreetMap...',
+                                      style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+
+                          // Direct territory / district matches
+                          if (_filteredTerritories.isNotEmpty) ...[
+                            const Padding(
+                              padding: EdgeInsets.only(left: 12, top: 8, bottom: 4),
+                              child: Text(
+                                'Districts & Areas',
+                                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.textMuted),
+                              ),
+                            ),
+                            ..._filteredTerritories.map((t) => ListTile(
+                                  dense: true,
+                                  leading: const Icon(Icons.location_city, color: AppColors.primary, size: 20),
+                                  title: Text(
+                                    t.territoryName,
+                                    style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                                  ),
+                                  subtitle: Text(
+                                    t.parentTerritoryName ?? t.regionType ?? '',
+                                    style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                                  ),
+                                  onTap: () => _selectTerritory(t),
+                                )),
+                          ],
+
+                          // OpenStreetMap Nominatim place matches
+                          if (_searchResults.isNotEmpty) ...[
+                            const Padding(
+                              padding: EdgeInsets.only(left: 12, top: 8, bottom: 4),
+                              child: Text(
+                                'OpenStreetMap Places',
+                                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.textMuted),
+                              ),
+                            ),
+                            ..._searchResults.map((p) => ListTile(
+                                  dense: true,
+                                  leading: const Icon(Icons.place_outlined, color: AppColors.primary, size: 20),
+                                  title: Text(
+                                    p.title,
+                                    style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                                  ),
+                                  subtitle: Text(
+                                    p.subtitle,
+                                    style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  onTap: () => _selectNominatimPlace(p),
+                                )),
+                          ],
+
+                          // Empty state
+                          if (!_isSearchLoading && _filteredTerritories.isEmpty && _searchResults.isEmpty && !_hasSearchError)
+                            Padding(
+                              padding: const EdgeInsets.all(16),
+                              child: Text(
+                                'No matching locations found for "${_searchController.text.trim()}". You can also tap the map or use GPS.',
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(fontSize: 12, color: AppColors.textMuted),
+                              ),
+                            ),
+
+                          // Search error / Retry state
+                          if (_hasSearchError)
+                            Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  const Icon(Icons.error_outline, size: 16, color: AppColors.error),
+                                  const SizedBox(width: 6),
+                                  const Text('Search failed. ', style: TextStyle(fontSize: 12, color: AppColors.error)),
+                                  TextButton(
+                                    onPressed: () => _performNominatimSearch(_searchController.text.trim()),
+                                    child: const Text('Retry', style: TextStyle(fontSize: 12)),
+                                  ),
+                                ],
+                              ),
+                            ),
+
+                          // OSM Attribution
+                          const Padding(
+                            padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                            child: Text(
+                              'Location data © OpenStreetMap contributors / Nominatim',
+                              style: TextStyle(fontSize: 9, color: AppColors.textMuted),
+                              textAlign: TextAlign.right,
+                            ),
                           ),
-                          subtitle: Text(
-                            t.parentTerritoryName ?? t.regionType ?? '',
-                            style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
-                          ),
-                          onTap: () => _selectTerritory(t),
-                        );
-                      },
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -583,35 +799,58 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 clipBehavior: Clip.antiAlias,
                 child: _isLoadingTerritories
                     ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
-                    : FlutterMap(
-                        mapController: _mapController,
-                        options: MapOptions(
-                          initialCenter: _selectedLocation,
-                          initialZoom: 12.0,
-                          onTap: (_, point) => _selectMapCoordinate(point),
-                        ),
-                        children: [
-                          TileLayer(
-                            urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                            userAgentPackageName: 'com.civicpulse.app',
-                            errorTileCallback: (tile, error, stackTrace) {},
-                            evictErrorTileStrategy: EvictErrorTileStrategy.none,
+                    : Listener(
+                        key: const Key('registration_map_gesture'),
+                        behavior: HitTestBehavior.translucent,
+                        onPointerDown: (event) {
+                          _mapTapDownPosition = event.localPosition;
+                        },
+                        onPointerUp: (event) {
+                          final downPos = _mapTapDownPosition;
+                          if (downPos != null) {
+                            final delta = (event.localPosition - downPos).distance;
+                            if (delta > 20) return; // ignore panning / scrolling
+                          }
+                          try {
+                            final point = _mapController.camera.pointToLatLng(
+                              math.Point(event.localPosition.dx, event.localPosition.dy),
+                            );
+                            _selectMapCoordinate(point);
+                          } catch (e) {
+                            debugPrint('[MapTap] pointToLatLng fallback: $e');
+                            _selectMapCoordinate(_selectedLocation);
+                          }
+                        },
+                        child: FlutterMap(
+                          mapController: _mapController,
+                          options: MapOptions(
+                            initialCenter: _selectedLocation,
+                            initialZoom: 12.0,
+                            onTap: (_, point) => _selectMapCoordinate(point),
                           ),
-                          MarkerLayer(
-                            markers: [
-                              Marker(
-                                point: _selectedLocation,
-                                width: 44,
-                                height: 44,
-                                child: const Icon(
-                                  Icons.location_pin,
-                                  color: AppColors.error,
-                                  size: 40,
+                          children: [
+                            TileLayer(
+                              urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                              userAgentPackageName: 'com.civicpulse.app',
+                              errorTileCallback: (tile, error, stackTrace) {},
+                              evictErrorTileStrategy: EvictErrorTileStrategy.none,
+                            ),
+                            MarkerLayer(
+                              markers: [
+                                Marker(
+                                  point: _selectedLocation,
+                                  width: 44,
+                                  height: 44,
+                                  child: const Icon(
+                                    Icons.location_pin,
+                                    color: AppColors.error,
+                                    size: 40,
+                                  ),
                                 ),
-                              ),
-                            ],
-                          ),
-                        ],
+                              ],
+                            ),
+                          ],
+                        ),
                       ),
               ),
 
@@ -621,17 +860,17 @@ class _RegisterScreenState extends State<RegisterScreen> {
               Container(
                 padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
-                  color: _selectedTerritory != null ? AppColors.primaryLight.withValues(alpha: 0.3) : AppColors.surfaceVariant,
+                  color: _hasSelectedHomeLocation ? AppColors.primaryLight.withValues(alpha: 0.3) : AppColors.surfaceVariant,
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
-                    color: _selectedTerritory != null ? AppColors.primary : AppColors.border,
+                    color: _hasSelectedHomeLocation ? AppColors.primary : AppColors.border,
                   ),
                 ),
                 child: Row(
                   children: [
                     Icon(
-                      _selectedTerritory != null ? Icons.check_circle : Icons.info_outline,
-                      color: _selectedTerritory != null ? AppColors.primary : AppColors.textMuted,
+                      _hasSelectedHomeLocation ? Icons.check_circle : Icons.info_outline,
+                      color: _hasSelectedHomeLocation ? AppColors.primary : AppColors.textMuted,
                       size: 22,
                     ),
                     const SizedBox(width: 12),
@@ -640,24 +879,45 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            _selectedTerritory != null ? 'Selected Location' : 'No Location Selected',
+                            _hasSelectedHomeLocation ? 'Home location selected' : 'No Home Location Selected',
                             style: TextStyle(
                               fontSize: 12,
                               fontWeight: FontWeight.w600,
-                              color: _selectedTerritory != null ? AppColors.primaryDark : AppColors.textMuted,
+                              color: _hasSelectedHomeLocation ? AppColors.primaryDark : AppColors.textMuted,
                             ),
                           ),
                           const SizedBox(height: 2),
-                          Text(
-                            _selectedTerritory != null
-                                ? '${_selectedTerritory!.territoryName}${_selectedTerritory!.parentTerritoryName != null ? " · ${_selectedTerritory!.parentTerritoryName}" : ""}'
-                                : 'Tap map, use GPS, or search above to select your territory.',
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: _selectedTerritory != null ? FontWeight.w700 : FontWeight.w400,
-                              color: AppColors.textPrimary,
+                          if (_hasSelectedHomeLocation) ...[
+                            if (_selectedAddressTitle != null && _selectedAddressTitle!.isNotEmpty)
+                              Text(
+                                _selectedAddressTitle!,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w500,
+                                  color: AppColors.textPrimary,
+                                ),
+                              ),
+                            Text(
+                              _selectedTerritory != null
+                                  ? 'District: ${_selectedTerritory!.territoryName}'
+                                  : 'Lat: ${_selectedLocation.latitude.toStringAsFixed(4)}, Lon: ${_selectedLocation.longitude.toStringAsFixed(4)}',
+                              style: const TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.primaryDark,
+                              ),
                             ),
-                          ),
+                          ] else
+                            const Text(
+                              'Tap map, use GPS, or search above to select your home location.',
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w400,
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
                         ],
                       ),
                     ),
@@ -667,9 +927,27 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
               const SizedBox(height: 24),
 
-              CustomButton(
-                text: 'Next',
-                onPressed: _selectedTerritory != null ? _handleStep2Next : null,
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  if (!_hasSelectedHomeLocation && _selectedTerritory == null)
+                    const Padding(
+                      padding: EdgeInsets.only(bottom: 8.0),
+                      child: Text(
+                        'Select your home location above to continue',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                          color: AppColors.textMuted,
+                        ),
+                      ),
+                    ),
+                  CustomButton(
+                    text: 'Next',
+                    onPressed: (_hasSelectedHomeLocation || _selectedTerritory != null) ? _handleStep2Next : null,
+                  ),
+                ],
               ),
             ],
           ),

@@ -599,4 +599,111 @@ class OAuth2SecurityIntegrationTest {
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("name=\"username\"")))
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("name=\"password\"")));
     }
+
+    @Test
+    @DisplayName("Exact Flutter mobile OAuth login flow with civicpulse://oauth2redirect and prompt=login")
+    void shouldSimulateExactFlutterOAuthLoginFlow() throws Exception {
+        String email = "flutter_flow_" + System.currentTimeMillis() + "@example.com";
+        String password = "Password123!";
+        registerTestUser("Flutter User", email, password);
+
+        // 1. Flutter app opens Chrome Custom Tab to /oauth2/authorize
+        var authRes = mockMvc.perform(get("/oauth2/authorize" +
+                        "?response_type=code" +
+                        "&client_id=civicpulse-mobile-client" +
+                        "&redirect_uri=civicpulse://oauth2redirect" +
+                        "&scope=openid" +
+                        "&state=flutter-state-12345" +
+                        "&code_challenge=E9Melhoa2OwvFrGMTJguCH5rtx64ZWqiJ61Z35NY-yo" +
+                        "&code_challenge_method=S256" +
+                        "&prompt=login")
+                        .accept(MediaType.TEXT_HTML))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(header().string("Location", org.hamcrest.Matchers.endsWith("/login")))
+                .andReturn();
+
+        var session = (org.springframework.mock.web.MockHttpSession) authRes.getRequest().getSession(false);
+        org.junit.jupiter.api.Assertions.assertNotNull(session);
+
+        // 2. User enters credentials and clicks Sign In
+        var loginRes = mockMvc.perform(post("/login")
+                        .session(session)
+                        .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                        .param("username", email)
+                        .param("password", password))
+                .andExpect(status().is3xxRedirection())
+                .andReturn();
+
+        String locAfterLogin = loginRes.getResponse().getHeader("Location");
+        System.out.println("=== Location after login: " + locAfterLogin);
+        org.junit.jupiter.api.Assertions.assertNotNull(locAfterLogin);
+        org.junit.jupiter.api.Assertions.assertNotEquals("/", locAfterLogin, "Must not redirect to '/'");
+
+        // 3. Browser follows redirect to /oauth2/authorize
+        var authFollowRes = mockMvc.perform(get(locAfterLogin)
+                        .session(session)
+                        .accept(MediaType.TEXT_HTML))
+                .andExpect(status().is3xxRedirection())
+                .andReturn();
+
+        String locFinal = authFollowRes.getResponse().getHeader("Location");
+        System.out.println("=== Location after authorize follow: " + locFinal);
+        org.junit.jupiter.api.Assertions.assertNotNull(locFinal);
+        org.junit.jupiter.api.Assertions.assertTrue(locFinal.startsWith("civicpulse://oauth2redirect"),
+                "Final redirect must be to civicpulse://oauth2redirect. Got: " + locFinal);
+        org.junit.jupiter.api.Assertions.assertTrue(locFinal.contains("code="),
+                "Final redirect must contain authorization code. Got: " + locFinal);
+    }
+
+    @Test
+    @DisplayName("OAuth form login fallback: restores OAuth redirect even when session request cache is missing (via return_to form param)")
+    void shouldRestoreOAuthRedirectViaReturnToWhenSessionCacheMissing() throws Exception {
+        String email = "fallback_flow_" + System.currentTimeMillis() + "@example.com";
+        String password = "Password123!";
+        registerTestUser("Fallback User", email, password);
+
+        // Submit POST /login WITHOUT any prior session (simulating cookie/session loss),
+        // but with return_to parameter preserved by the HTML form.
+        String returnToUrl = "/oauth2/authorize" +
+                "?response_type=code" +
+                "&client_id=civicpulse-mobile-client" +
+                "&redirect_uri=civicpulse://oauth2redirect" +
+                "&scope=openid" +
+                "&state=fallback-state-999" +
+                "&code_challenge=E9Melhoa2OwvFrGMTJguCH5rtx64ZWqiJ61Z35NY-yo" +
+                "&code_challenge_method=S256" +
+                "&prompt=login";
+
+        var loginRes = mockMvc.perform(post("/login")
+                        .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                        .param("username", email)
+                        .param("password", password)
+                        .param("return_to", returnToUrl))
+                .andExpect(status().is3xxRedirection())
+                .andReturn();
+
+        String locAfterLogin = loginRes.getResponse().getHeader("Location");
+        org.junit.jupiter.api.Assertions.assertNotNull(locAfterLogin);
+        org.junit.jupiter.api.Assertions.assertNotEquals("/", locAfterLogin, "Must not redirect to '/'");
+        org.junit.jupiter.api.Assertions.assertTrue(locAfterLogin.startsWith("/oauth2/authorize"),
+                "Redirect must point to /oauth2/authorize relative path. Got: " + locAfterLogin);
+
+        var session = (org.springframework.mock.web.MockHttpSession) loginRes.getRequest().getSession(false);
+        org.junit.jupiter.api.Assertions.assertNotNull(session);
+
+        // Follow redirect to /oauth2/authorize
+        var authFollowRes = mockMvc.perform(get(locAfterLogin)
+                        .session(session)
+                        .accept(MediaType.TEXT_HTML))
+                .andExpect(status().is3xxRedirection())
+                .andReturn();
+
+        String locFinal = authFollowRes.getResponse().getHeader("Location");
+        org.junit.jupiter.api.Assertions.assertNotNull(locFinal);
+        org.junit.jupiter.api.Assertions.assertTrue(locFinal.startsWith("civicpulse://oauth2redirect"),
+                "Final redirect must be to civicpulse://oauth2redirect. Got: " + locFinal);
+        org.junit.jupiter.api.Assertions.assertTrue(locFinal.contains("code="),
+                "Final redirect must contain authorization code. Got: " + locFinal);
+    }
 }
+
