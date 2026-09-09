@@ -75,6 +75,16 @@ class StubIssueRepo implements IssueRepository {
       issues;
 
   @override
+  Future<List<IssueModel>> getNearbyIssues({
+    required double latitude,
+    required double longitude,
+    double radiusKm = 15.0,
+    int page = 0,
+    int size = 20,
+  }) async =>
+      issues;
+
+  @override
   Future<List<CategoryModel>> getCategories() async => categories;
   @override
   Future<List<TerritoryModel>> getTerritories() async => [];

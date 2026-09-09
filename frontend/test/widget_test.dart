@@ -83,6 +83,15 @@ class MockIssueRepository implements IssueRepository {
   }) async => [];
 
   @override
+  Future<List<IssueModel>> getNearbyIssues({
+    required double latitude,
+    required double longitude,
+    double radiusKm = 15.0,
+    int page = 0,
+    int size = 20,
+  }) async => [];
+
+  @override
   Future<IssueModel> getIssueById(int id) async => const IssueModel(
         issueId: 1,
         title: 'Mock Issue',

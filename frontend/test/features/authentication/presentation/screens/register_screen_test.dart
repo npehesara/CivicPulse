@@ -249,12 +249,12 @@ void main() {
       await tester.pumpAndSettle();
 
       // --- STEP 2: Location Selection ---
-      expect(find.text('Select your location'), findsOneWidget);
+      expect(find.text('Your Home Location'), findsOneWidget);
       expect(find.text('2 of 5'), findsOneWidget);
       expect(find.text('Use my current location'), findsOneWidget);
 
       // Search and select Balapitiya
-      final searchField = find.widgetWithText(TextField, 'Search location or council...');
+      final searchField = find.widgetWithText(TextField, 'Search city, town, or address...');
       expect(searchField, findsOneWidget);
       await tester.enterText(searchField, 'Balapitiya');
       await tester.pumpAndSettle();
@@ -263,7 +263,7 @@ void main() {
       await tester.tap(find.text('Balapitiya Pradeshiya Sabha').first);
       await tester.pumpAndSettle();
 
-      expect(find.text('Selected Location'), findsOneWidget);
+      expect(find.text('Home location selected'), findsOneWidget);
 
       // Tap Next to proceed to Step 3
       await tester.tap(find.widgetWithText(ElevatedButton, 'Next'));
@@ -298,6 +298,9 @@ void main() {
       expect(authRepo.lastRequest!.fullName, 'Kasun Perera');
       expect(authRepo.lastRequest!.email, 'kasun@example.com');
       expect(authRepo.lastRequest!.registeredTerritoryId, 2);
+      expect(authRepo.lastRequest!.territoryId, 2);
+      expect(authRepo.lastRequest!.homeLatitude, isNotNull);
+      expect(authRepo.lastRequest!.homeLongitude, isNotNull);
       expect(authRepo.lastRequest!.password, 'Password123!');
 
       // --- STEP 5: Registration Complete ---
@@ -330,7 +333,7 @@ void main() {
       await tester.pumpAndSettle();
 
       // Select territory in Step 2
-      await tester.enterText(find.widgetWithText(TextField, 'Search location or council...'), 'Colombo');
+      await tester.enterText(find.widgetWithText(TextField, 'Search city, town, or address...'), 'Colombo');
       await tester.pumpAndSettle();
       await tester.tap(find.text('Colombo Municipal Council').first);
       await tester.pumpAndSettle();
@@ -405,7 +408,7 @@ void main() {
       await tester.pumpAndSettle();
 
       // Step 2
-      await tester.enterText(find.widgetWithText(TextField, 'Search location or council...'), 'Kandy');
+      await tester.enterText(find.widgetWithText(TextField, 'Search city, town, or address...'), 'Kandy');
       await tester.pumpAndSettle();
       await tester.tap(find.text('Kandy Municipal Council').first);
       await tester.pumpAndSettle();

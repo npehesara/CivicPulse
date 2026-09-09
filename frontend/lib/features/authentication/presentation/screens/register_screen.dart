@@ -376,9 +376,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   void _handleStep2Next() {
     if (_hasSelectedHomeLocation || _selectedTerritory != null) {
-      if (_selectedTerritory == null) {
-        _selectedTerritory = findDistrictForCoordinates(_selectedLocation, _territories);
-      }
+      _selectedTerritory ??= findDistrictForCoordinates(_selectedLocation, _territories);
       _goToPage(2);
     }
   }

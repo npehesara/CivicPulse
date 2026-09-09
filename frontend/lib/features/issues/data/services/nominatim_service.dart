@@ -16,6 +16,7 @@ class NominatimPlace {
   final String? municipality;
   final String? district;
   final String? state;
+  final String? resolvedDistrict;
 
   const NominatimPlace({
     required this.placeId,
@@ -28,6 +29,7 @@ class NominatimPlace {
     this.municipality,
     this.district,
     this.state,
+    this.resolvedDistrict,
   });
 
   factory NominatimPlace.fromJson(Map<String, dynamic> json) {
@@ -35,11 +37,13 @@ class NominatimPlace {
     final rawLon = double.tryParse('${json['lon']}') ?? 0.0;
     final address = json['address'] as Map<String, dynamic>? ?? {};
 
+    final municipality = address['municipality']?.toString();
     final town = address['town']?.toString() ?? address['suburb']?.toString() ?? address['village']?.toString();
-    final city = address['city']?.toString() ?? address['municipality']?.toString();
+    final city = address['city']?.toString() ?? municipality;
     final district = address['state_district']?.toString() ??
         address['county']?.toString() ??
         address['district']?.toString();
+    final resolvedDistrict = district?.replaceAll(RegExp(r'\s+District$', caseSensitive: false), '').trim();
     final state = address['state']?.toString() ?? address['province']?.toString();
 
     // Determine primary title
@@ -69,6 +73,7 @@ class NominatimPlace {
       municipality: municipality,
       district: district,
       state: state,
+      resolvedDistrict: resolvedDistrict,
     );
   }
 }
