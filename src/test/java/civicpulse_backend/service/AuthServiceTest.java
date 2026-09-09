@@ -3,12 +3,17 @@ package civicpulse_backend.service;
 import civicpulse_backend.dto.auth.AuthResponse;
 import civicpulse_backend.dto.auth.LoginRequest;
 import civicpulse_backend.dto.auth.RegisterRequest;
+import civicpulse_backend.dto.image.CloudinaryUploadResult;
 import civicpulse_backend.entity.AccountStatus;
 import civicpulse_backend.entity.Role;
+import civicpulse_backend.entity.Territory;
 import civicpulse_backend.entity.User;
 import civicpulse_backend.exception.AccountStatusException;
 import civicpulse_backend.exception.DuplicateEmailException;
+import civicpulse_backend.exception.ImageUploadException;
 import civicpulse_backend.exception.InvalidCredentialsException;
+import civicpulse_backend.exception.ResourceNotFoundException;
+import civicpulse_backend.repository.TerritoryRepository;
 import civicpulse_backend.repository.UserRepository;
 import civicpulse_backend.security.JwtService;
 import org.junit.jupiter.api.BeforeEach;
@@ -16,6 +21,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.time.LocalDateTime;
@@ -33,6 +39,12 @@ class AuthServiceTest {
     private UserRepository userRepository;
 
     @Mock
+    private TerritoryRepository territoryRepository;
+
+    @Mock
+    private CloudinaryService cloudinaryService;
+
+    @Mock
     private PasswordEncoder passwordEncoder;
 
     @Mock
@@ -42,14 +54,30 @@ class AuthServiceTest {
 
     @BeforeEach
     void setUp() {
-        authService = new AuthService(userRepository, passwordEncoder, jwtService);
+        authService = new AuthService(userRepository, territoryRepository, cloudinaryService, passwordEncoder, jwtService);
     }
 
     @Test
     void shouldRegisterUserSuccessfully() {
-        RegisterRequest request = new RegisterRequest("John Doe", "john@example.com", "Password123!", "0771234567");
+        RegisterRequest request = new RegisterRequest("John Doe", "john@example.com", "Password123!", "0771234567", 1L);
+        MockMultipartFile imageFile = new MockMultipartFile("profileImage", "avatar.jpg", "image/jpeg", "fake image bytes".getBytes());
+
+        Territory territory = new Territory();
+        territory.setTerritoryId(1L);
+        territory.setTerritoryName("Colombo Municipal Council");
+
+        CloudinaryUploadResult uploadResult = new CloudinaryUploadResult(
+                "https://res.cloudinary.com/demo/image/upload/v1/civicpulse/profiles/avatar.jpg",
+                "civicpulse/profiles/avatar_123",
+                "jpg",
+                1024L,
+                400,
+                400
+        );
 
         when(userRepository.existsByEmail("john@example.com")).thenReturn(false);
+        when(territoryRepository.findById(1L)).thenReturn(Optional.of(territory));
+        when(cloudinaryService.uploadProfileImage(imageFile)).thenReturn(uploadResult);
         when(passwordEncoder.encode("Password123!")).thenReturn("encodedPasswordHash");
 
         User savedUser = new User();
@@ -58,6 +86,8 @@ class AuthServiceTest {
         savedUser.setEmail("john@example.com");
         savedUser.setPasswordHash("encodedPasswordHash");
         savedUser.setPhoneNumber("0771234567");
+        savedUser.setProfileImage(uploadResult.secureUrl());
+        savedUser.setRegisteredTerritoryId(1L);
         savedUser.setRole(Role.CITIZEN);
         savedUser.setAccountStatus(AccountStatus.ACTIVE);
         savedUser.setCreatedAt(LocalDateTime.now());
@@ -65,33 +95,142 @@ class AuthServiceTest {
         when(userRepository.save(any(User.class))).thenReturn(savedUser);
         when(jwtService.generateToken(savedUser)).thenReturn("dummyJwtToken");
 
-        AuthResponse response = authService.register(request);
+        AuthResponse response = authService.register(request, imageFile);
 
         assertNotNull(response);
         assertEquals("dummyJwtToken", response.getToken());
         assertEquals("User registered successfully", response.getMessage());
         assertNotNull(response.getUser());
         assertEquals("john@example.com", response.getUser().getEmail());
+        assertEquals("https://res.cloudinary.com/demo/image/upload/v1/civicpulse/profiles/avatar.jpg", response.getUser().getProfileImage());
+        assertEquals(1L, response.getUser().getRegisteredTerritoryId());
+        assertEquals("Colombo Municipal Council", response.getUser().getRegisteredTerritoryName());
         assertEquals(Role.CITIZEN, response.getUser().getRole());
         assertEquals(AccountStatus.ACTIVE, response.getUser().getAccountStatus());
 
+        verify(cloudinaryService).uploadProfileImage(imageFile);
         verify(passwordEncoder).encode("Password123!");
         verify(userRepository).save(any(User.class));
     }
 
     @Test
+    void shouldRegisterSuccessfullyWithoutProfileImage() {
+        RegisterRequest request = new RegisterRequest("John Doe", "john@example.com", "Password123!", "0771234567", 1L);
+        Territory territory = new Territory();
+        territory.setTerritoryId(1L);
+        territory.setTerritoryName("Colombo Municipal Council");
+
+        User savedUser = new User();
+        savedUser.setUserId(1L);
+        savedUser.setFullName("John Doe");
+        savedUser.setEmail("john@example.com");
+        savedUser.setRole(Role.CITIZEN);
+        savedUser.setAccountStatus(AccountStatus.ACTIVE);
+        savedUser.setRegisteredTerritoryId(1L);
+        savedUser.setProfileImage(null);
+
+        when(userRepository.existsByEmail("john@example.com")).thenReturn(false);
+        when(territoryRepository.findById(1L)).thenReturn(Optional.of(territory));
+        when(passwordEncoder.encode("Password123!")).thenReturn("encodedPassword");
+        when(userRepository.save(any(User.class))).thenReturn(savedUser);
+        when(jwtService.generateToken(savedUser)).thenReturn("mockJwtToken");
+
+        AuthResponse response = authService.register(request, null);
+
+        assertNotNull(response);
+        assertEquals("mockJwtToken", response.getToken());
+        assertNull(response.getUser().getProfileImage());
+        verify(cloudinaryService, never()).uploadProfileImage(any());
+        verify(userRepository).save(any(User.class));
+    }
+
+    @Test
     void shouldThrowExceptionWhenRegisteringDuplicateEmail() {
-        RegisterRequest request = new RegisterRequest("John Doe", "john@example.com", "Password123!", "0771234567");
+        RegisterRequest request = new RegisterRequest("John Doe", "john@example.com", "Password123!", "0771234567", 1L);
+        MockMultipartFile imageFile = new MockMultipartFile("profileImage", "avatar.jpg", "image/jpeg", "fake image bytes".getBytes());
 
         when(userRepository.existsByEmail("john@example.com")).thenReturn(true);
 
         DuplicateEmailException exception = assertThrows(
                 DuplicateEmailException.class,
-                () -> authService.register(request)
+                () -> authService.register(request, imageFile)
         );
 
         assertTrue(exception.getMessage().contains("Email is already registered"));
+        verify(cloudinaryService, never()).uploadProfileImage(any());
         verify(userRepository, never()).save(any(User.class));
+    }
+
+    @Test
+    void shouldThrowExceptionWhenTerritoryNotFound() {
+        RegisterRequest request = new RegisterRequest("John Doe", "john@example.com", "Password123!", "0771234567", 999L);
+        MockMultipartFile imageFile = new MockMultipartFile("profileImage", "avatar.jpg", "image/jpeg", "fake image bytes".getBytes());
+
+        when(userRepository.existsByEmail("john@example.com")).thenReturn(false);
+        when(territoryRepository.findById(999L)).thenReturn(Optional.empty());
+
+        ResourceNotFoundException exception = assertThrows(
+                ResourceNotFoundException.class,
+                () -> authService.register(request, imageFile)
+        );
+
+        assertTrue(exception.getMessage().contains("Territory not found with id: 999"));
+        verify(cloudinaryService, never()).uploadProfileImage(any());
+        verify(userRepository, never()).save(any(User.class));
+    }
+
+    @Test
+    void shouldThrowExceptionWhenCloudinaryUploadFails() {
+        RegisterRequest request = new RegisterRequest("John Doe", "john@example.com", "Password123!", "0771234567", 1L);
+        MockMultipartFile imageFile = new MockMultipartFile("profileImage", "avatar.jpg", "image/jpeg", "fake image bytes".getBytes());
+
+        Territory territory = new Territory();
+        territory.setTerritoryId(1L);
+
+        when(userRepository.existsByEmail("john@example.com")).thenReturn(false);
+        when(territoryRepository.findById(1L)).thenReturn(Optional.of(territory));
+        when(cloudinaryService.uploadProfileImage(imageFile)).thenThrow(new ImageUploadException("Cloudinary upload failed"));
+
+        ImageUploadException exception = assertThrows(
+                ImageUploadException.class,
+                () -> authService.register(request, imageFile)
+        );
+
+        assertEquals("Cloudinary upload failed", exception.getMessage());
+        verify(userRepository, never()).save(any(User.class));
+    }
+
+    @Test
+    void shouldCleanupCloudinaryImageWhenDatabaseSaveFails() {
+        RegisterRequest request = new RegisterRequest("John Doe", "john@example.com", "Password123!", "0771234567", 1L);
+        MockMultipartFile imageFile = new MockMultipartFile("profileImage", "avatar.jpg", "image/jpeg", "fake image bytes".getBytes());
+
+        Territory territory = new Territory();
+        territory.setTerritoryId(1L);
+
+        CloudinaryUploadResult uploadResult = new CloudinaryUploadResult(
+                "https://res.cloudinary.com/demo/image/upload/v1/civicpulse/profiles/avatar.jpg",
+                "civicpulse/profiles/avatar_123",
+                "jpg",
+                1024L,
+                400,
+                400
+        );
+
+        when(userRepository.existsByEmail("john@example.com")).thenReturn(false);
+        when(territoryRepository.findById(1L)).thenReturn(Optional.of(territory));
+        when(cloudinaryService.uploadProfileImage(imageFile)).thenReturn(uploadResult);
+        when(passwordEncoder.encode("Password123!")).thenReturn("encodedPasswordHash");
+        when(userRepository.save(any(User.class))).thenThrow(new RuntimeException("Database connection failure"));
+
+        RuntimeException exception = assertThrows(
+                RuntimeException.class,
+                () -> authService.register(request, imageFile)
+        );
+
+        assertEquals("Database connection failure", exception.getMessage());
+        // Verify cleanup was invoked on Cloudinary
+        verify(cloudinaryService).deleteImage("civicpulse/profiles/avatar_123");
     }
 
     @Test

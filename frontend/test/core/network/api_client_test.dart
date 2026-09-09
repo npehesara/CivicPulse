@@ -204,5 +204,102 @@ void main() {
       expect(requestCount, 1); // Only initial request made before refresh failed
       expect(sessionManager.sessionCleared, isTrue);
     });
+
+    test('postMultipart sends fields and files properly and parses response', () async {
+      final mockHttpClient = MockClient((request) async {
+        expect(request.method, 'POST');
+        expect(request.url.path, '/api/auth/register');
+        expect(request.headers['content-type'], contains('multipart/form-data'));
+        expect(request.body, contains('name="fullName"'));
+        expect(request.body, contains('John Doe'));
+        expect(request.body, contains('name="email"'));
+        expect(request.body, contains('john@example.com'));
+        expect(request.body, contains('name="registeredTerritoryId"'));
+        expect(request.body, contains('5'));
+        expect(request.body, contains('name="profileImage"'));
+        expect(request.body, contains('filename="profile.jpg"'));
+
+        return http.Response(
+          jsonEncode({
+            'token': 'jwt_123',
+            'message': 'User registered successfully',
+            'user': {
+              'userId': 1,
+              'fullName': 'John Doe',
+              'email': 'john@example.com',
+              'role': 'CITIZEN',
+              'accountStatus': 'ACTIVE',
+              'registeredTerritoryId': 5,
+              'registeredTerritoryName': 'Colombo Municipal Council',
+            },
+          }),
+          201,
+        );
+      });
+
+      final apiClient = ApiClient(
+        client: mockHttpClient,
+        sessionManager: sessionManager,
+      );
+
+      final file = http.MultipartFile.fromBytes(
+        'profileImage',
+        [1, 2, 3, 4, 5],
+        filename: 'profile.jpg',
+      );
+
+      final response = await apiClient.postMultipart(
+        '/api/auth/register',
+        fields: {
+          'fullName': 'John Doe',
+          'email': 'john@example.com',
+          'registeredTerritoryId': '5',
+        },
+        files: [file],
+        requiresAuth: false,
+      );
+
+      expect(response['token'], 'jwt_123');
+      expect(response['user']['registeredTerritoryId'], 5);
+      expect(response['user']['registeredTerritoryName'], 'Colombo Municipal Council');
+    });
+
+    test('postMultipart passes through 400 validation error properly', () async {
+      final mockHttpClient = MockClient((request) async {
+        return http.Response(
+          jsonEncode({
+            'message': 'Validation failed',
+            'validationErrors': {
+              'email': 'Email is invalid',
+              'registeredTerritoryId': 'Registered territory is required',
+            },
+          }),
+          400,
+        );
+      });
+
+      final apiClient = ApiClient(
+        client: mockHttpClient,
+        sessionManager: sessionManager,
+      );
+
+      expect(
+        () => apiClient.postMultipart(
+          '/api/auth/register',
+          fields: {'fullName': 'John'},
+          requiresAuth: false,
+        ),
+        throwsA(
+          isA<ApiException>()
+              .having((e) => e.statusCode, 'statusCode', 400)
+              .having((e) => e.message, 'message', 'Validation failed')
+              .having(
+                (e) => e.validationErrors?['registeredTerritoryId'],
+                'territory validation error',
+                'Registered territory is required',
+              ),
+        ),
+      );
+    });
   });
 }

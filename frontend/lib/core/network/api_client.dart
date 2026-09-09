@@ -40,11 +40,16 @@ class ApiClient {
     return Uri.parse(fullUrl);
   }
 
-  Future<Map<String, String>> _getHeaders({bool requiresAuth = true}) async {
+  Future<Map<String, String>> _getHeaders({
+    bool requiresAuth = true,
+    bool isJson = true,
+  }) async {
     final headers = <String, String>{
-      'Content-Type': 'application/json',
       'Accept': 'application/json',
     };
+    if (isJson) {
+      headers['Content-Type'] = 'application/json';
+    }
 
     if (requiresAuth) {
       final token = await sessionManager.getAccessToken();
@@ -79,13 +84,14 @@ class ApiClient {
   Future<dynamic> _sendRequest(
     Future<http.Response> Function(Map<String, String> headers) makeRequest, {
     required bool requiresAuth,
+    bool isJson = true,
   }) async {
     try {
       if (requiresAuth) {
         await _ensureValidAccessToken();
       }
 
-      var headers = await _getHeaders(requiresAuth: requiresAuth);
+      var headers = await _getHeaders(requiresAuth: requiresAuth, isJson: isJson);
       var response = await makeRequest(headers).timeout(ApiConstants.connectTimeout);
 
       // Handle 401 Unauthorized: attempt single refresh & retry
@@ -94,7 +100,7 @@ class ApiClient {
           if (oauthService != null) {
             await oauthService!.refreshAccessToken();
             // Obtain updated Bearer headers with rotated access token
-            headers = await _getHeaders(requiresAuth: requiresAuth);
+            headers = await _getHeaders(requiresAuth: requiresAuth, isJson: isJson);
             // Retry the original request exactly once
             response = await makeRequest(headers).timeout(ApiConstants.connectTimeout);
           }
@@ -146,6 +152,32 @@ class ApiClient {
         body: body != null ? jsonEncode(body) : null,
       ),
       requiresAuth: requiresAuth,
+    );
+  }
+
+  Future<dynamic> postMultipart(
+    String path, {
+    Map<String, String>? fields,
+    List<http.MultipartFile>? files,
+    Map<String, dynamic>? queryParameters,
+    bool requiresAuth = true,
+  }) async {
+    final uri = _buildUri(path, queryParameters);
+    return _sendRequest(
+      (headers) async {
+        final request = http.MultipartRequest('POST', uri);
+        request.headers.addAll(headers);
+        if (fields != null) {
+          request.fields.addAll(fields);
+        }
+        if (files != null) {
+          request.files.addAll(files);
+        }
+        final streamedResponse = await _client.send(request);
+        return http.Response.fromStream(streamedResponse);
+      },
+      requiresAuth: requiresAuth,
+      isJson: false,
     );
   }
 

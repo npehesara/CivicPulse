@@ -94,7 +94,10 @@ class IssueApiService {
   }
 
   Future<List<TerritoryModel>> getTerritories() async {
-    final response = await apiClient.get(ApiConstants.territoriesEndpoint);
+    final response = await apiClient.get(
+      ApiConstants.territoriesEndpoint,
+      requiresAuth: false,
+    );
     if (response is List) {
       return response.map((e) => TerritoryModel.fromJson(e as Map<String, dynamic>)).toList();
     }

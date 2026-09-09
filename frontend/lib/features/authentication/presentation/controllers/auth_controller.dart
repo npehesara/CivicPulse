@@ -22,6 +22,11 @@ class AuthController extends ChangeNotifier {
   String? _errorMessage;
   Map<String, String>? _validationErrors;
 
+  int? _selectedTerritoryId;
+  String? _selectedProfileImagePath;
+  List<int>? _selectedProfileImageBytes;
+  String? _selectedProfileImageFilename;
+
   AuthController({required this.authRepository});
 
   AuthStatus get status => _status;
@@ -30,6 +35,35 @@ class AuthController extends ChangeNotifier {
   Map<String, String>? get validationErrors => _validationErrors;
   bool get isLoading => _status == AuthStatus.loading;
   bool get isAuthenticated => _status == AuthStatus.authenticated;
+
+  int? get selectedTerritoryId => _selectedTerritoryId;
+  String? get selectedProfileImagePath => _selectedProfileImagePath;
+  List<int>? get selectedProfileImageBytes => _selectedProfileImageBytes;
+  String? get selectedProfileImageFilename => _selectedProfileImageFilename;
+
+  void setSelectedTerritoryId(int? territoryId) {
+    _selectedTerritoryId = territoryId;
+    notifyListeners();
+  }
+
+  void setSelectedProfileImage({
+    String? path,
+    List<int>? bytes,
+    String? filename,
+  }) {
+    _selectedProfileImagePath = path;
+    _selectedProfileImageBytes = bytes;
+    _selectedProfileImageFilename = filename;
+    notifyListeners();
+  }
+
+  void clearRegistrationSelection() {
+    _selectedTerritoryId = null;
+    _selectedProfileImagePath = null;
+    _selectedProfileImageBytes = null;
+    _selectedProfileImageFilename = null;
+    notifyListeners();
+  }
 
   void clearError() {
     _errorMessage = null;
@@ -140,6 +174,10 @@ class AuthController extends ChangeNotifier {
     required String email,
     required String password,
     String? phoneNumber,
+    int? registeredTerritoryId,
+    String? profileImagePath,
+    List<int>? profileImageBytes,
+    String? profileImageFilename,
   }) async {
     _status = AuthStatus.loading;
     _errorMessage = null;
@@ -152,9 +190,14 @@ class AuthController extends ChangeNotifier {
         email: email,
         password: password,
         phoneNumber: phoneNumber,
+        registeredTerritoryId: registeredTerritoryId ?? _selectedTerritoryId,
+        profileImagePath: profileImagePath ?? _selectedProfileImagePath,
+        profileImageBytes: profileImageBytes ?? _selectedProfileImageBytes,
+        profileImageFilename: profileImageFilename ?? _selectedProfileImageFilename,
       );
       await authRepository.register(request);
       _status = AuthStatus.unauthenticated;
+      clearRegistrationSelection();
       notifyListeners();
       return true;
     } on ApiException catch (e) {

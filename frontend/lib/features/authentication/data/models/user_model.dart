@@ -7,6 +7,7 @@ class UserModel {
   final String role;
   final String accountStatus;
   final int? registeredTerritoryId;
+  final String? registeredTerritoryName;
   final DateTime? createdAt;
 
   const UserModel({
@@ -18,6 +19,7 @@ class UserModel {
     required this.role,
     required this.accountStatus,
     this.registeredTerritoryId,
+    this.registeredTerritoryName,
     this.createdAt,
   });
 
@@ -33,6 +35,7 @@ class UserModel {
       registeredTerritoryId: json['registeredTerritoryId'] is int
           ? json['registeredTerritoryId'] as int
           : int.tryParse(json['registeredTerritoryId']?.toString() ?? ''),
+      registeredTerritoryName: json['registeredTerritoryName'] as String?,
       createdAt: json['createdAt'] != null ? DateTime.tryParse(json['createdAt'].toString()) : null,
     );
   }
@@ -47,6 +50,7 @@ class UserModel {
       'role': role,
       'accountStatus': accountStatus,
       'registeredTerritoryId': registeredTerritoryId,
+      'registeredTerritoryName': registeredTerritoryName,
       'createdAt': createdAt?.toIso8601String(),
     };
   }

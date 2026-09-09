@@ -15,6 +15,8 @@ public class UserResponse {
     private String profileImage;
     private Role role;
     private AccountStatus accountStatus;
+    private Long registeredTerritoryId;
+    private String registeredTerritoryName;
     private LocalDateTime createdAt;
 
     public UserResponse() {
@@ -22,6 +24,12 @@ public class UserResponse {
 
     public UserResponse(Long userId, String fullName, String email, String phoneNumber, String profileImage,
                         Role role, AccountStatus accountStatus, LocalDateTime createdAt) {
+        this(userId, fullName, email, phoneNumber, profileImage, role, accountStatus, null, null, createdAt);
+    }
+
+    public UserResponse(Long userId, String fullName, String email, String phoneNumber, String profileImage,
+                        Role role, AccountStatus accountStatus, Long registeredTerritoryId,
+                        String registeredTerritoryName, LocalDateTime createdAt) {
         this.userId = userId;
         this.fullName = fullName;
         this.email = email;
@@ -29,10 +37,16 @@ public class UserResponse {
         this.profileImage = profileImage;
         this.role = role;
         this.accountStatus = accountStatus;
+        this.registeredTerritoryId = registeredTerritoryId;
+        this.registeredTerritoryName = registeredTerritoryName;
         this.createdAt = createdAt;
     }
 
     public static UserResponse fromEntity(User user) {
+        return fromEntity(user, null);
+    }
+
+    public static UserResponse fromEntity(User user, String territoryName) {
         if (user == null) {
             return null;
         }
@@ -44,6 +58,8 @@ public class UserResponse {
                 user.getProfileImage(),
                 user.getRole(),
                 user.getAccountStatus(),
+                user.getRegisteredTerritoryId(),
+                territoryName,
                 user.getCreatedAt()
         );
     }
@@ -102,6 +118,22 @@ public class UserResponse {
 
     public void setAccountStatus(AccountStatus accountStatus) {
         this.accountStatus = accountStatus;
+    }
+
+    public Long getRegisteredTerritoryId() {
+        return registeredTerritoryId;
+    }
+
+    public void setRegisteredTerritoryId(Long registeredTerritoryId) {
+        this.registeredTerritoryId = registeredTerritoryId;
+    }
+
+    public String getRegisteredTerritoryName() {
+        return registeredTerritoryName;
+    }
+
+    public void setRegisteredTerritoryName(String registeredTerritoryName) {
+        this.registeredTerritoryName = registeredTerritoryName;
     }
 
     public LocalDateTime getCreatedAt() {

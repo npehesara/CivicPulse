@@ -18,13 +18,16 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import java.time.LocalDateTime;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -50,28 +53,35 @@ class AuthControllerTest {
 
     @Test
     void shouldRegisterUserSuccessfullyAndReturn201() throws Exception {
-        RegisterRequest request = new RegisterRequest("John Doe", "john@example.com", "Password123!", "0771234567");
-        UserResponse userResponse = new UserResponse(1L, "John Doe", "john@example.com", "0771234567", null, Role.CITIZEN, AccountStatus.ACTIVE, LocalDateTime.now());
+        MockMultipartFile imageFile = new MockMultipartFile("profileImage", "avatar.jpg", "image/jpeg", "image bytes".getBytes());
+        UserResponse userResponse = new UserResponse(1L, "John Doe", "john@example.com", "0771234567",
+                "https://res.cloudinary.com/demo/image/upload/avatar.jpg", Role.CITIZEN, AccountStatus.ACTIVE,
+                1L, "Colombo Municipal Council", LocalDateTime.now());
         AuthResponse authResponse = new AuthResponse("mockToken123", "User registered successfully", userResponse);
 
-        when(authService.register(any(RegisterRequest.class))).thenReturn(authResponse);
+        when(authService.register(any(RegisterRequest.class), any())).thenReturn(authResponse);
 
-        mockMvc.perform(post("/api/auth/register")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
+        mockMvc.perform(multipart("/api/auth/register")
+                        .file(imageFile)
+                        .param("fullName", "John Doe")
+                        .param("email", "john@example.com")
+                        .param("password", "Password123!")
+                        .param("phoneNumber", "0771234567")
+                        .param("registeredTerritoryId", "1"))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.token").value("mockToken123"))
                 .andExpect(jsonPath("$.message").value("User registered successfully"))
-                .andExpect(jsonPath("$.user.email").value("john@example.com"));
+                .andExpect(jsonPath("$.user.email").value("john@example.com"))
+                .andExpect(jsonPath("$.user.registeredTerritoryId").value(1))
+                .andExpect(jsonPath("$.user.registeredTerritoryName").value("Colombo Municipal Council"));
     }
 
     @Test
     void shouldReturn400WhenRegisterPayloadIsInvalid() throws Exception {
-        RegisterRequest request = new RegisterRequest("", "invalid-email", "123", null);
-
-        mockMvc.perform(post("/api/auth/register")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
+        mockMvc.perform(multipart("/api/auth/register")
+                        .param("fullName", "")
+                        .param("email", "invalid-email")
+                        .param("password", "123"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.status").value(400))
                 .andExpect(jsonPath("$.validationErrors").exists());
@@ -79,14 +89,18 @@ class AuthControllerTest {
 
     @Test
     void shouldReturn409WhenRegisterDuplicateEmail() throws Exception {
-        RegisterRequest request = new RegisterRequest("John Doe", "john@example.com", "Password123!", "0771234567");
+        MockMultipartFile imageFile = new MockMultipartFile("profileImage", "avatar.jpg", "image/jpeg", "image bytes".getBytes());
 
-        when(authService.register(any(RegisterRequest.class)))
+        when(authService.register(any(RegisterRequest.class), any()))
                 .thenThrow(new DuplicateEmailException("Email is already registered: john@example.com"));
 
-        mockMvc.perform(post("/api/auth/register")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
+        mockMvc.perform(multipart("/api/auth/register")
+                        .file(imageFile)
+                        .param("fullName", "John Doe")
+                        .param("email", "john@example.com")
+                        .param("password", "Password123!")
+                        .param("phoneNumber", "0771234567")
+                        .param("registeredTerritoryId", "1"))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.status").value(409))
                 .andExpect(jsonPath("$.message").value("Email is already registered: john@example.com"));

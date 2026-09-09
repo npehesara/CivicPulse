@@ -165,6 +165,24 @@ void main() {
       expect(authController.errorMessage, isNull);
     });
 
+    test('register with selected territory and image passes data and clears selection', () async {
+      authController.setSelectedTerritoryId(5);
+      authController.setSelectedProfileImage(path: '/path/to/profile.jpg');
+
+      expect(authController.selectedTerritoryId, 5);
+      expect(authController.selectedProfileImagePath, '/path/to/profile.jpg');
+
+      final success = await authController.register(
+        fullName: 'Jane Doe',
+        email: 'jane@example.com',
+        password: 'Password123!',
+      );
+
+      expect(success, isTrue);
+      expect(authController.selectedTerritoryId, isNull);
+      expect(authController.selectedProfileImagePath, isNull);
+    });
+
     test('register failure with duplicate email should set conflict error message', () async {
       mockRepository.shouldSucceed = false;
       mockRepository.errorToThrow = ApiException(
@@ -181,6 +199,30 @@ void main() {
       expect(success, isFalse);
       expect(authController.status, AuthStatus.error);
       expect(authController.errorMessage, 'An account with this email already exists.');
+    });
+
+    test('register failure with 400 validation errors should set validation errors map', () async {
+      mockRepository.shouldSucceed = false;
+      mockRepository.errorToThrow = ApiException(
+        statusCode: 400,
+        message: 'Validation failed',
+        validationErrors: {
+          'registeredTerritoryId': 'Registered territory is required',
+          'profileImage': 'Profile image is required',
+        },
+      );
+
+      final success = await authController.register(
+        fullName: 'Jane Doe',
+        email: 'jane@example.com',
+        password: 'Password123!',
+      );
+
+      expect(success, isFalse);
+      expect(authController.status, AuthStatus.error);
+      expect(authController.errorMessage, 'Validation failed');
+      expect(authController.validationErrors?['registeredTerritoryId'], 'Registered territory is required');
+      expect(authController.validationErrors?['profileImage'], 'Profile image is required');
     });
 
     test('logout should clear currentUser and set unauthenticated', () async {

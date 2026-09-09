@@ -1,21 +1,30 @@
 package civicpulse_backend.security;
 
+import civicpulse_backend.dto.image.CloudinaryUploadResult;
+import civicpulse_backend.entity.Territory;
+import civicpulse_backend.repository.TerritoryRepository;
+import civicpulse_backend.service.CloudinaryService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
 
 import java.util.List;
 
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -25,7 +34,14 @@ class OAuth2SecurityIntegrationTest {
     @Autowired
     private WebApplicationContext context;
 
+    @Autowired
+    private TerritoryRepository territoryRepository;
+
+    @MockitoBean
+    private CloudinaryService cloudinaryService;
+
     private MockMvc mockMvc;
+    private Long testTerritoryId;
 
     @BeforeEach
     void setUp() {
@@ -33,6 +49,38 @@ class OAuth2SecurityIntegrationTest {
                 .webAppContextSetup(context)
                 .apply(springSecurity())
                 .build();
+
+        if (territoryRepository.count() == 0) {
+            Territory territory = new Territory();
+            territory.setTerritoryName("Colombo Municipal Council");
+            territory.setTerritoryType("MUNICIPAL_COUNCIL");
+            testTerritoryId = territoryRepository.save(territory).getTerritoryId();
+        } else {
+            testTerritoryId = territoryRepository.findAll().get(0).getTerritoryId();
+        }
+
+        when(cloudinaryService.uploadProfileImage(any())).thenReturn(new CloudinaryUploadResult(
+                "https://res.cloudinary.com/demo/image/upload/v1/civicpulse/profiles/mock_avatar.jpg",
+                "civicpulse/profiles/mock_avatar",
+                "jpg",
+                1024L,
+                400,
+                400
+        ));
+    }
+
+    private void registerTestUser(String fullName, String email, String password) throws Exception {
+        MockMultipartFile imageFile = new MockMultipartFile(
+                "profileImage", "avatar.jpg", "image/jpeg", "image bytes".getBytes());
+
+        mockMvc.perform(multipart("/api/auth/register")
+                        .file(imageFile)
+                        .param("fullName", fullName)
+                        .param("email", email)
+                        .param("password", password)
+                        .param("phoneNumber", "0771234567")
+                        .param("registeredTerritoryId", String.valueOf(testTerritoryId)))
+                .andExpect(status().isCreated());
     }
 
     @Test
@@ -126,14 +174,27 @@ class OAuth2SecurityIntegrationTest {
     @DisplayName("Public user registration endpoint /api/auth/register should remain accessible (permitAll)")
     void shouldAllowRegistrationWithoutAuthentication() throws Exception {
         String randomEmail = "testuser_" + System.currentTimeMillis() + "@example.com";
-        String requestJson = String.format("{\"fullName\":\"Test User\",\"email\":\"%s\",\"password\":\"SecurePass123!\"}", randomEmail);
+        MockMultipartFile imageFile = new MockMultipartFile(
+                "profileImage", "avatar.jpg", "image/jpeg", "image bytes".getBytes());
 
-        mockMvc.perform(post("/api/auth/register")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(requestJson))
+        mockMvc.perform(multipart("/api/auth/register")
+                        .file(imageFile)
+                        .param("fullName", "Test User")
+                        .param("email", randomEmail)
+                        .param("password", "SecurePass123!")
+                        .param("registeredTerritoryId", String.valueOf(testTerritoryId)))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.token").exists())
-                .andExpect(jsonPath("$.user.email").value(randomEmail));
+                .andExpect(jsonPath("$.user.email").value(randomEmail))
+                .andExpect(jsonPath("$.user.profileImage").exists())
+                .andExpect(jsonPath("$.user.registeredTerritoryId").value(testTerritoryId));
+    }
+
+    @Test
+    @DisplayName("Public territory list endpoint GET /api/territories should be accessible without authentication (permitAll)")
+    void shouldAllowGetTerritoriesWithoutAuthentication() throws Exception {
+        mockMvc.perform(get("/api/territories"))
+                .andExpect(status().isOk());
     }
 
     @Test
@@ -168,10 +229,7 @@ class OAuth2SecurityIntegrationTest {
         // Step 1: Register test user
         String email = "lifecycle_" + System.currentTimeMillis() + "@example.com";
         String password = "Password123!";
-        mockMvc.perform(post("/api/auth/register")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(String.format("{\"fullName\":\"Lifecycle User\",\"email\":\"%s\",\"password\":\"%s\"}", email, password)))
-                .andExpect(status().isCreated());
+        registerTestUser("Lifecycle User", email, password);
 
         // Step 2: Form Login for session
         var loginResult = mockMvc.perform(post("/login")
@@ -315,10 +373,7 @@ class OAuth2SecurityIntegrationTest {
         String email = "auth_valid_" + System.currentTimeMillis() + "@example.com";
         String password = "ValidPassword123!";
 
-        mockMvc.perform(post("/api/auth/register")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(String.format("{\"fullName\":\"Valid User\",\"email\":\"%s\",\"password\":\"%s\"}", email, password)))
-                .andExpect(status().isCreated());
+        registerTestUser("Valid User", email, password);
 
         mockMvc.perform(post("/login")
                         .contentType(MediaType.APPLICATION_FORM_URLENCODED)
@@ -334,10 +389,7 @@ class OAuth2SecurityIntegrationTest {
         String email = "auth_case_" + System.currentTimeMillis() + "@example.com";
         String password = "CasePassword123!";
 
-        mockMvc.perform(post("/api/auth/register")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(String.format("{\"fullName\":\"Case User\",\"email\":\"%s\",\"password\":\"%s\"}", email, password)))
-                .andExpect(status().isCreated());
+        registerTestUser("Case User", email, password);
 
         mockMvc.perform(post("/login")
                         .contentType(MediaType.APPLICATION_FORM_URLENCODED)
@@ -352,10 +404,7 @@ class OAuth2SecurityIntegrationTest {
         String email = "auth_fail_" + System.currentTimeMillis() + "@example.com";
         String password = "RealPassword123!";
 
-        mockMvc.perform(post("/api/auth/register")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(String.format("{\"fullName\":\"Fail User\",\"email\":\"%s\",\"password\":\"%s\"}", email, password)))
-                .andExpect(status().isCreated());
+        registerTestUser("Fail User", email, password);
 
         mockMvc.perform(post("/login")
                         .contentType(MediaType.APPLICATION_FORM_URLENCODED)
@@ -389,12 +438,7 @@ class OAuth2SecurityIntegrationTest {
         // Register a user to authenticate with
         String email = "oauth_restore_" + System.currentTimeMillis() + "@example.com";
         String password = "RestoreTest123!";
-        mockMvc.perform(post("/api/auth/register")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(String.format(
-                                "{\"fullName\":\"Restore User\",\"email\":\"%s\",\"password\":\"%s\"}",
-                                email, password)))
-                .andExpect(status().isCreated());
+        registerTestUser("Restore User", email, password);
 
         // Step 1: Unauthenticated GET /oauth2/authorize.
         // Parameters are embedded directly in the URL string — MockMvc .param() on a GET
@@ -460,12 +504,7 @@ class OAuth2SecurityIntegrationTest {
         // Register User A
         String emailA = "user_a_" + System.currentTimeMillis() + "@example.com";
         String passwordA = "PasswordA123!";
-        mockMvc.perform(post("/api/auth/register")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(String.format(
-                                "{\"fullName\":\"User A\",\"email\":\"%s\",\"password\":\"%s\"}",
-                                emailA, passwordA)))
-                .andExpect(status().isCreated());
+        registerTestUser("User A", emailA, passwordA);
 
         // 1. User A initiates OAuth and logs in to establish session
         var authResA = mockMvc.perform(get(
@@ -527,12 +566,7 @@ class OAuth2SecurityIntegrationTest {
         // 3. Register User B and log in with User B credentials on this session
         String emailB = "user_b_" + System.currentTimeMillis() + "@example.com";
         String passwordB = "PasswordB123!";
-        mockMvc.perform(post("/api/auth/register")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(String.format(
-                                "{\"fullName\":\"User B\",\"email\":\"%s\",\"password\":\"%s\"}",
-                                emailB, passwordB)))
-                .andExpect(status().isCreated());
+        registerTestUser("User B", emailB, passwordB);
 
         var loginBRes = mockMvc.perform(post("/login")
                         .session(session)
