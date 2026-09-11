@@ -31,6 +31,8 @@ public class CloudinaryService {
 
     private static final Set<String> ALLOWED_CONTENT_TYPES = Set.of(
             "image/jpeg",
+            "image/jpg",
+            "image/pjpeg",
             "image/png",
             "image/webp",
             "image/heic",
@@ -156,6 +158,26 @@ public class CloudinaryService {
         }
 
         String contentType = file.getContentType();
+        if (contentType == null || contentType.isBlank()
+                || "application/octet-stream".equalsIgnoreCase(contentType.trim())
+                || "binary/octet-stream".equalsIgnoreCase(contentType.trim())) {
+            String originalFilename = file.getOriginalFilename();
+            if (originalFilename != null) {
+                String lower = originalFilename.toLowerCase().trim();
+                if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) {
+                    contentType = "image/jpeg";
+                } else if (lower.endsWith(".png")) {
+                    contentType = "image/png";
+                } else if (lower.endsWith(".webp")) {
+                    contentType = "image/webp";
+                } else if (lower.endsWith(".heic")) {
+                    contentType = "image/heic";
+                } else if (lower.endsWith(".gif")) {
+                    contentType = "image/gif";
+                }
+            }
+        }
+
         if (contentType == null || !ALLOWED_CONTENT_TYPES.contains(contentType.toLowerCase().trim())) {
             throw new ImageUploadException(String.format(
                     "Unsupported image content type: '%s'. Allowed types are: %s",

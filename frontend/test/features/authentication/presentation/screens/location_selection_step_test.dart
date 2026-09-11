@@ -378,5 +378,101 @@ void main() {
       // GPS tap initiated without crash
       expect(find.byType(FlutterMap), findsOneWidget);
     });
+
+    testWidgets('Step 2 manual Pick on Map: shows fixed center pin, Confirm this Location button, and confirms selection', (tester) async {
+      tester.view.physicalSize = const Size(800, 1200);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+
+      final authRepo = MockRegisterAuthRepo();
+      final issueRepo = MockIssueRepo();
+      final authController = AuthController(authRepository: authRepo);
+
+      await tester.pumpWidget(createTestWidget(
+        authController: authController,
+        issueRepository: issueRepo,
+      ));
+      await tester.pumpAndSettle();
+
+      await navigateToStep2(tester);
+
+      // Verify "Pick on Map" button
+      final pickOnMapButton = find.text('Move pin');
+      expect(pickOnMapButton, findsOneWidget);
+      await tester.tap(pickOnMapButton);
+      await tester.pumpAndSettle();
+
+      // In manual picker mode: fixed center pin hint and "Confirm this Location" button appear
+      expect(find.text('Move map under pin'), findsOneWidget);
+      expect(find.text('Confirm this Location'), findsOneWidget);
+
+      // Tap "Confirm this Location"
+      await tester.tap(find.text('Confirm this Location'));
+      await tester.pumpAndSettle();
+
+      // Location confirmed and district auto-detected
+      expect(find.text('Home location selected'), findsOneWidget);
+      expect(find.textContaining('Auto-detected'), findsOneWidget);
+
+      final nextButton = tester.widget<ElevatedButton>(find.widgetWithText(ElevatedButton, 'Next'));
+      expect(nextButton.onPressed, isNotNull);
+    });
+
+    testWidgets('Step 2 manual map picker: requires explicit confirmation and does not confirm on tap or pan', (tester) async {
+      tester.view.physicalSize = const Size(800, 1200);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+
+      final authRepo = MockRegisterAuthRepo();
+      final issueRepo = MockIssueRepo();
+      final authController = AuthController(authRepository: authRepo);
+
+      await tester.pumpWidget(createTestWidget(
+        authController: authController,
+        issueRepository: issueRepo,
+      ));
+      await tester.pumpAndSettle();
+
+      await navigateToStep2(tester);
+
+      // Enter manual map mode
+      final pickOnMapButton = find.text('Move pin');
+      await tester.tap(pickOnMapButton);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Confirm this Location'), findsOneWidget);
+
+      // Tap the map while in manual picker mode
+      final mapGesture = find.byKey(const Key('registration_map_gesture'));
+      await tester.tap(mapGesture);
+      await tester.pumpAndSettle();
+
+      // Home location must NOT be confirmed by tapping the map in manual mode
+      expect(find.text('Home location selected'), findsNothing);
+
+      // Close manual picker mode without confirming
+      final closeButton = find.text('Close');
+      expect(closeButton, findsOneWidget);
+      await tester.tap(closeButton);
+      await tester.pumpAndSettle();
+
+      // Location must still not be confirmed
+      expect(find.text('Home location selected'), findsNothing);
+
+      // Re-enter manual picker mode and explicitly confirm
+      await tester.tap(find.text('Move pin'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Confirm this Location'));
+      await tester.pumpAndSettle();
+
+      // Now confirmed!
+      expect(find.text('Home location selected'), findsOneWidget);
+
+      // Now outside manual picker mode: tapping the map must NOT overwrite confirmed location
+      await tester.tap(mapGesture);
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.pumpAndSettle();
+      expect(find.text('Home location selected'), findsOneWidget);
+    });
   });
 }

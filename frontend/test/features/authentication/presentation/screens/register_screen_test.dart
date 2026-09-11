@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'package:civicpulse_frontend/core/constants/app_strings.dart';
 import 'package:civicpulse_frontend/core/network/api_exception.dart';
@@ -94,16 +95,19 @@ class _MockHttpClient extends Fake implements HttpClient {
   bool autoUncompress = true;
 
   @override
-  Future<HttpClientRequest> getUrl(Uri url) async => _MockHttpClientRequest();
+  Future<HttpClientRequest> getUrl(Uri url) async => _MockHttpClientRequest(url);
 
   @override
-  Future<HttpClientRequest> openUrl(String method, Uri url) async => _MockHttpClientRequest();
+  Future<HttpClientRequest> openUrl(String method, Uri url) async => _MockHttpClientRequest(url);
 
   @override
   void close({bool force = false}) {}
 }
 
 class _MockHttpClientRequest extends Fake implements HttpClientRequest {
+  final Uri? url;
+  _MockHttpClientRequest([this.url]);
+
   @override
   final HttpHeaders headers = _MockHttpHeaders();
 
@@ -137,20 +141,96 @@ class _MockHttpClientRequest extends Fake implements HttpClientRequest {
   void writeln([Object? obj = '']) {}
 
   @override
-  Future<HttpClientResponse> close() async => _MockHttpClientResponse();
+  Future<HttpClientResponse> close() async {
+    final urlStr = url?.toString() ?? '';
+    if (urlStr.contains('search')) {
+      final q = Uri.decodeQueryComponent(urlStr);
+      String placeName = 'Balapitiya';
+      String district = 'Galle';
+      String lat = '6.2483';
+      String lon = '80.0417';
+      if (q.contains('Colombo')) {
+        placeName = 'Colombo';
+        district = 'Colombo';
+        lat = '6.9271';
+        lon = '79.8612';
+      } else if (q.contains('Kandy')) {
+        placeName = 'Kandy';
+        district = 'Kandy';
+        lat = '7.2906';
+        lon = '80.6337';
+      }
+      final json = jsonEncode([
+        {
+          'place_id': 12345,
+          'lat': lat,
+          'lon': lon,
+          'display_name': '$placeName, $district District, Sri Lanka',
+          'address': {
+            'city': placeName,
+            'town': placeName,
+            'district': district,
+            'country': 'Sri Lanka',
+          }
+        }
+      ]);
+      return _MockHttpClientResponse(json);
+    }
+    if (urlStr.contains('reverse')) {
+      final json = jsonEncode({
+        'place_id': 12345,
+        'lat': '6.9271',
+        'lon': '79.8612',
+        'display_name': 'Colombo, Sri Lanka',
+        'address': {
+          'city': 'Colombo',
+          'district': 'Colombo',
+          'country': 'Sri Lanka',
+        }
+      });
+      return _MockHttpClientResponse(json);
+    }
+    return _MockHttpClientResponse('[]');
+  }
 }
 
 class _MockHttpHeaders extends Fake implements HttpHeaders {
   @override
   void set(String name, Object value, {bool preserveHeaderCase = false}) {}
+
+  @override
+  void forEach(void Function(String name, List<String> values) action) {
+    action('content-type', ['application/json; charset=utf-8']);
+  }
+
+  @override
+  String? value(String name) => name.toLowerCase() == 'content-type' ? 'application/json; charset=utf-8' : null;
 }
 
 class _MockHttpClientResponse extends Fake implements HttpClientResponse {
+  final List<int> _body;
+  @override
+  final HttpHeaders headers = _MockHttpHeaders();
+
+  _MockHttpClientResponse([String body = '']) : _body = utf8.encode(body);
+
   @override
   int get statusCode => 200;
 
   @override
-  int get contentLength => 0;
+  int get contentLength => _body.length;
+
+  @override
+  bool get isRedirect => false;
+
+  @override
+  bool get persistentConnection => false;
+
+  @override
+  String get reasonPhrase => 'OK';
+
+  @override
+  List<RedirectInfo> get redirects => const [];
 
   @override
   HttpClientResponseCompressionState get compressionState => HttpClientResponseCompressionState.notCompressed;
@@ -162,7 +242,7 @@ class _MockHttpClientResponse extends Fake implements HttpClientResponse {
     void Function()? onDone,
     bool? cancelOnError,
   }) {
-    return const Stream<List<int>>.empty().listen(
+    return Stream<List<int>>.value(_body).listen(
       onData,
       onError: onError,
       onDone: onDone,
@@ -257,10 +337,11 @@ void main() {
       final searchField = find.widgetWithText(TextField, 'Search city, town, or address...');
       expect(searchField, findsOneWidget);
       await tester.enterText(searchField, 'Balapitiya');
+      await tester.pump(const Duration(milliseconds: 700));
       await tester.pumpAndSettle();
 
-      expect(find.text('Balapitiya Pradeshiya Sabha'), findsWidgets);
-      await tester.tap(find.text('Balapitiya Pradeshiya Sabha').first);
+      expect(find.widgetWithText(ListTile, 'Balapitiya'), findsOneWidget);
+      await tester.tap(find.widgetWithText(ListTile, 'Balapitiya'));
       await tester.pumpAndSettle();
 
       expect(find.text('Home location selected'), findsOneWidget);
@@ -297,8 +378,8 @@ void main() {
       expect(authRepo.lastRequest, isNotNull);
       expect(authRepo.lastRequest!.fullName, 'Kasun Perera');
       expect(authRepo.lastRequest!.email, 'kasun@example.com');
-      expect(authRepo.lastRequest!.registeredTerritoryId, 2);
-      expect(authRepo.lastRequest!.territoryId, 2);
+      expect(authRepo.lastRequest!.registeredTerritoryId, 7);
+      expect(authRepo.lastRequest!.territoryId, 7);
       expect(authRepo.lastRequest!.homeLatitude, isNotNull);
       expect(authRepo.lastRequest!.homeLongitude, isNotNull);
       expect(authRepo.lastRequest!.password, 'Password123!');
@@ -308,7 +389,7 @@ void main() {
       expect(find.text('Log in'), findsOneWidget);
       expect(find.text('Kasun Perera'), findsOneWidget);
       expect(find.text('kasun@example.com'), findsOneWidget);
-      expect(find.text('Balapitiya Pradeshiya Sabha'), findsOneWidget);
+      expect(find.text('Galle'), findsOneWidget);
     });
 
     testWidgets('Step 3: Password mismatch validation prevents moving to Step 4', (tester) async {
@@ -332,10 +413,12 @@ void main() {
       await tester.tap(find.text('Next'));
       await tester.pumpAndSettle();
 
-      // Select territory in Step 2
+      // Select territory in Step 2 via place search
       await tester.enterText(find.widgetWithText(TextField, 'Search city, town, or address...'), 'Colombo');
+      await tester.pump(const Duration(milliseconds: 700));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Colombo Municipal Council').first);
+      expect(find.widgetWithText(ListTile, 'Colombo'), findsOneWidget);
+      await tester.tap(find.widgetWithText(ListTile, 'Colombo'));
       await tester.pumpAndSettle();
       await tester.tap(find.widgetWithText(ElevatedButton, 'Next'));
       await tester.pumpAndSettle();
@@ -407,10 +490,12 @@ void main() {
       await tester.tap(find.text('Next'));
       await tester.pumpAndSettle();
 
-      // Step 2
+      // Step 2: Search and select place
       await tester.enterText(find.widgetWithText(TextField, 'Search city, town, or address...'), 'Kandy');
+      await tester.pump(const Duration(milliseconds: 700));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Kandy Municipal Council').first);
+      expect(find.widgetWithText(ListTile, 'Kandy'), findsOneWidget);
+      await tester.tap(find.widgetWithText(ListTile, 'Kandy'));
       await tester.pumpAndSettle();
       await tester.tap(find.widgetWithText(ElevatedButton, 'Next'));
       await tester.pumpAndSettle();

@@ -63,11 +63,11 @@ class CloudinaryServiceTest {
     }
 
     @Test
-    @DisplayName("Should accept all allowed MIME types (jpeg, png, webp, heic, gif)")
+    @DisplayName("Should accept all allowed MIME types (jpeg, jpg, pjpeg, png, webp, heic, gif)")
     void shouldAcceptAllAllowedMimeTypes() throws IOException {
         when(cloudinary.uploader()).thenReturn(uploader);
 
-        String[] allowedMimes = {"image/jpeg", "image/png", "image/webp", "image/heic", "image/gif"};
+        String[] allowedMimes = {"image/jpeg", "image/jpg", "image/pjpeg", "image/png", "image/webp", "image/heic", "image/gif"};
         Map<String, Object> mockResponse = Map.of(
                 "secure_url", "https://res.cloudinary.com/demo/image/upload/sample.jpg",
                 "public_id", "civicpulse/issues/sample"
@@ -80,6 +80,26 @@ class CloudinaryServiceTest {
             assertNotNull(result);
             assertEquals("https://res.cloudinary.com/demo/image/upload/sample.jpg", result.secureUrl());
         }
+    }
+
+    @Test
+    @DisplayName("Should accept octet-stream with valid image file extension fallback")
+    void shouldAcceptOctetStreamWithValidExtensionFallback() throws IOException {
+        when(cloudinary.uploader()).thenReturn(uploader);
+
+        Map<String, Object> mockResponse = Map.of(
+                "secure_url", "https://res.cloudinary.com/demo/image/upload/sample.jpg",
+                "public_id", "civicpulse/profiles/sample"
+        );
+        when(uploader.upload(any(byte[].class), any(Map.class))).thenReturn(mockResponse);
+
+        MockMultipartFile jpgFile = new MockMultipartFile("file", "my_photo.jpg", "application/octet-stream", "valid jpg bytes".getBytes());
+        CloudinaryUploadResult resultJpg = cloudinaryService.uploadProfileImage(jpgFile);
+        assertNotNull(resultJpg);
+
+        MockMultipartFile pngFile = new MockMultipartFile("file", "avatar.png", "application/octet-stream", "valid png bytes".getBytes());
+        CloudinaryUploadResult resultPng = cloudinaryService.uploadProfileImage(pngFile);
+        assertNotNull(resultPng);
     }
 
     @Test

@@ -1,4 +1,5 @@
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
 import '../../../../core/constants/api_constants.dart';
 import '../../../../core/network/api_client.dart';
 import '../models/auth_response_model.dart';
@@ -16,16 +17,48 @@ class AuthApiService {
     final List<http.MultipartFile> files = [];
 
     if (request.profileImageBytes != null && request.profileImageBytes!.isNotEmpty) {
+      final filename = request.profileImageFilename ?? 'profile_image.jpg';
+      final dotIndex = filename.lastIndexOf('.');
+      final ext = (dotIndex != -1 && dotIndex < filename.length - 1)
+          ? filename.substring(dotIndex + 1).toLowerCase()
+          : 'jpg';
+
+      final MediaType mediaType;
+      if (ext == 'png') {
+        mediaType = MediaType('image', 'png');
+      } else if (ext == 'webp') {
+        mediaType = MediaType('image', 'webp');
+      } else {
+        mediaType = MediaType('image', 'jpeg');
+      }
+
       files.add(http.MultipartFile.fromBytes(
         'profileImage',
         request.profileImageBytes!,
-        filename: request.profileImageFilename ?? 'profile_image.jpg',
+        filename: filename,
+        contentType: mediaType,
       ));
     } else if (request.profileImagePath != null && request.profileImagePath!.isNotEmpty) {
+      final filename = request.profileImageFilename ?? 'profile_image.jpg';
+      final dotIndex = filename.lastIndexOf('.');
+      final ext = (dotIndex != -1 && dotIndex < filename.length - 1)
+          ? filename.substring(dotIndex + 1).toLowerCase()
+          : 'jpg';
+
+      final MediaType mediaType;
+      if (ext == 'png') {
+        mediaType = MediaType('image', 'png');
+      } else if (ext == 'webp') {
+        mediaType = MediaType('image', 'webp');
+      } else {
+        mediaType = MediaType('image', 'jpeg');
+      }
+
       files.add(await http.MultipartFile.fromPath(
         'profileImage',
         request.profileImagePath!,
-        filename: request.profileImageFilename,
+        filename: filename,
+        contentType: mediaType,
       ));
     }
 
