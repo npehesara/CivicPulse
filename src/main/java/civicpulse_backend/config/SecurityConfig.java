@@ -207,13 +207,34 @@ public class SecurityConfig {
                         }
                         org.springframework.security.core.context.SecurityContextHolder.clearContext();
 
-                        // Redirect to /login
-                        response.sendRedirect("/login");
+                        // Redirect to /login with return_to to preserve OAuth context across proxy/cookie boundaries
+                        response.sendRedirect("/login?return_to=" + java.net.URLEncoder.encode(authUrl, java.nio.charset.StandardCharsets.UTF_8));
                         return;
                     }
                 }
             }
             filterChain.doFilter(request, response);
+        }
+    }
+
+    public static class OAuthLoginUrlAuthenticationEntryPoint extends LoginUrlAuthenticationEntryPoint {
+        public OAuthLoginUrlAuthenticationEntryPoint(String loginFormUrl) {
+            super(loginFormUrl);
+        }
+
+        @Override
+        protected String determineUrlToUseForThisRequest(jakarta.servlet.http.HttpServletRequest request,
+                jakarta.servlet.http.HttpServletResponse response,
+                org.springframework.security.core.AuthenticationException exception) {
+            String url = super.determineUrlToUseForThisRequest(request, response, exception);
+            String uri = request.getRequestURI();
+            if (uri != null && uri.contains("/oauth2/authorize")) {
+                String qs = request.getQueryString();
+                String fullAuthUrl = uri + (qs != null ? "?" + qs : "");
+                String separator = url.contains("?") ? "&" : "?";
+                url = url + separator + "return_to=" + java.net.URLEncoder.encode(fullAuthUrl, java.nio.charset.StandardCharsets.UTF_8);
+            }
+            return url;
         }
     }
 
@@ -240,14 +261,14 @@ public class SecurityConfig {
                         .clientAuthentication(clientAuth -> {
                             clientAuth.authenticationConverter(new PublicClientRefreshTokenAuthenticationConverter());
                             clientAuth.authenticationProvider(
-                                    new PublicClientRefreshTokenAuthenticationProvider(registeredClientRepository));
+                                     new PublicClientRefreshTokenAuthenticationProvider(registeredClientRepository));
                         }))
                 .authorizeHttpRequests(authorize -> authorize.anyRequest().authenticated())
                 .requestCache(cache -> cache.requestCache(requestCache()))
                 .addFilterAfter(new PromptLoginFilter(requestCache()), org.springframework.security.web.context.SecurityContextHolderFilter.class)
                 .exceptionHandling(exceptions -> exceptions
                         .defaultAuthenticationEntryPointFor(
-                                new LoginUrlAuthenticationEntryPoint("/login"),
+                                new OAuthLoginUrlAuthenticationEntryPoint("/login"),
                                 new MediaTypeRequestMatcher(MediaType.TEXT_HTML)))
                 .authenticationProvider(authenticationProvider())
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()));
@@ -277,7 +298,15 @@ public class SecurityConfig {
                 .formLogin(form -> form
                         .loginPage("/login")
                         .permitAll()
-                        .successHandler(authenticationSuccessHandler()))
+                        .successHandler(authenticationSuccessHandler())
+                        .failureHandler((request, response, exception) -> {
+                            String returnTo = request.getParameter("return_to");
+                            String failureUrl = "/login?error";
+                            if (returnTo != null && returnTo.contains("/oauth2/authorize")) {
+                                failureUrl += "&return_to=" + java.net.URLEncoder.encode(returnTo, java.nio.charset.StandardCharsets.UTF_8);
+                            }
+                            response.sendRedirect(failureUrl);
+                        }))
                 .oauth2ResourceServer(oauth2 -> oauth2
                         .jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter()))
                         .authenticationEntryPoint(jwtAuthenticationEntryPoint))

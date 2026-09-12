@@ -429,7 +429,7 @@ class OAuth2SecurityIntegrationTest {
         mockMvc.perform(get("/oauth2/authorize?response_type=code&client_id=civicpulse-mobile-client&redirect_uri=http://localhost:8080/authorized&scope=openid&state=state123&code_challenge=E9Melhoa2OwvFrGMTJguCH5rtx64ZWqiJ61Z35NY-yo&code_challenge_method=S256")
                         .accept(MediaType.TEXT_HTML))
                 .andExpect(status().is3xxRedirection())
-                .andExpect(header().string("Location", org.hamcrest.Matchers.endsWith("/login")));
+                .andExpect(header().string("Location", org.hamcrest.Matchers.startsWith("/login")));
     }
 
     @Test
@@ -458,7 +458,7 @@ class OAuth2SecurityIntegrationTest {
                         "&code_challenge_method=S256")
                         .accept(MediaType.TEXT_HTML))
                 .andExpect(status().is3xxRedirection())
-                .andExpect(header().string("Location", org.hamcrest.Matchers.endsWith("/login")))
+                .andExpect(header().string("Location", org.hamcrest.Matchers.startsWith("/login")))
                 .andReturn();
 
         // Step 2: Verify the original OAuth request is saved in the HTTP session.
@@ -560,7 +560,7 @@ class OAuth2SecurityIntegrationTest {
                         .session(session)
                         .accept(MediaType.TEXT_HTML))
                 .andExpect(status().is3xxRedirection())
-                .andExpect(header().string("Location", org.hamcrest.Matchers.endsWith("/login")))
+                .andExpect(header().string("Location", org.hamcrest.Matchers.startsWith("/login")))
                 .andReturn();
 
         // 3. Register User B and log in with User B credentials on this session
@@ -619,7 +619,7 @@ class OAuth2SecurityIntegrationTest {
                         "&prompt=login")
                         .accept(MediaType.TEXT_HTML))
                 .andExpect(status().is3xxRedirection())
-                .andExpect(header().string("Location", org.hamcrest.Matchers.endsWith("/login")))
+                .andExpect(header().string("Location", org.hamcrest.Matchers.startsWith("/login")))
                 .andReturn();
 
         var session = (org.springframework.mock.web.MockHttpSession) authRes.getRequest().getSession(false);

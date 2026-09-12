@@ -35,9 +35,20 @@ public class LoginViewController {
             }
         }
 
+        if (effectiveReturnTo != null && effectiveReturnTo.contains("/oauth2/authorize")) {
+            jakarta.servlet.http.HttpSession session = request.getSession(true);
+            session.setAttribute("OAUTH_AUTHORIZATION_REQUEST_URL", effectiveReturnTo);
+        }
+
         String returnToField = (effectiveReturnTo != null && effectiveReturnTo.contains("/oauth2/authorize"))
                 ? "<input type=\"hidden\" name=\"return_to\" value=\"" + org.springframework.web.util.HtmlUtils.htmlEscape(effectiveReturnTo) + "\" />\n"
                 : "";
+
+        String formAction = (effectiveReturnTo != null && effectiveReturnTo.contains("/oauth2/authorize"))
+                ? "/login?return_to=" + org.springframework.web.util.HtmlUtils.htmlEscape(java.net.URLEncoder.encode(effectiveReturnTo, java.nio.charset.StandardCharsets.UTF_8))
+                : "/login";
+
+        String formTag = "<form method=\"post\" action=\"" + formAction + "\">";
 
         String errorBanner = (error != null) ? """
             <div class="alert alert-error" role="alert">
@@ -242,7 +253,7 @@ public class LoginViewController {
 
                     """ + errorBanner + logoutBanner + """
 
-                    <form method="post" action="/login">
+                    """ + formTag + """
                         """ + returnToField + """
                         <div class="form-group">
                             <label class="form-label" for="username">Email Address</label>
