@@ -174,6 +174,9 @@ class MockUserRepository implements UserRepository {
     String? phoneNumber,
     String? profileImage,
     int? registeredTerritoryId,
+    int? territoryId,
+    double? homeLatitude,
+    double? homeLongitude,
   }) async =>
       const UserProfileModel(
         userId: 1,
@@ -182,6 +185,36 @@ class MockUserRepository implements UserRepository {
         role: 'CITIZEN',
         accountStatus: 'ACTIVE',
       );
+
+  @override
+  Future<UserProfileModel> uploadProfileImage({
+    List<int>? bytes,
+    String? filePath,
+    required String filename,
+  }) async =>
+      const UserProfileModel(
+        userId: 1,
+        fullName: 'Test Citizen',
+        email: 'test@example.com',
+        role: 'CITIZEN',
+        accountStatus: 'ACTIVE',
+      );
+
+  @override
+  Future<UserProfileModel> deleteProfileImage() async => const UserProfileModel(
+        userId: 1,
+        fullName: 'Test Citizen',
+        email: 'test@example.com',
+        role: 'CITIZEN',
+        accountStatus: 'ACTIVE',
+      );
+
+  @override
+  Future<void> changePassword({
+    required String currentPassword,
+    required String newPassword,
+    String? confirmPassword,
+  }) async {}
 
   @override
   Future<PublicUserModel> getPublicUserProfile(int userId) async => const PublicUserModel(

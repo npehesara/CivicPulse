@@ -7,6 +7,7 @@ import '../../../issues/presentation/screens/create_issue_screen.dart';
 import '../../../issues/presentation/screens/issue_detail_screen.dart';
 import '../../../issues/presentation/widgets/issue_card.dart';
 import '../controllers/profile_controller.dart';
+import '../../data/models/user_profile_model.dart';
 import 'edit_profile_screen.dart';
 import 'user_search_screen.dart';
 
@@ -194,6 +195,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                               Expanded(
                                                 child: OutlinedButton.icon(
                                                   onPressed: () async {
+                                                    final authCtrl = context.read<AuthController>();
                                                     final updated = await Navigator.of(context).push<bool>(
                                                       MaterialPageRoute(
                                                         builder: (_) => EditProfileScreen(profile: profile),
@@ -202,7 +204,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                                     if (updated == true && mounted) {
                                                       await profileController.loadProfile();
                                                       if (profileController.profile != null) {
-                                                        context.read<AuthController>().syncUserProfile(profileController.profile!);
+                                                        authCtrl.syncUserProfile(profileController.profile!);
                                                       }
                                                     }
                                                   },

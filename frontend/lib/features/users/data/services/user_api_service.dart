@@ -96,11 +96,13 @@ class UserApiService {
     required String newPassword,
     String? confirmPassword,
   }) async {
-    final body = {
+    final body = <String, dynamic>{
       'currentPassword': currentPassword,
       'newPassword': newPassword,
-      if (confirmPassword != null) 'confirmPassword': confirmPassword,
     };
+    if (confirmPassword != null) {
+      body['confirmPassword'] = confirmPassword;
+    }
     await apiClient.put(ApiConstants.userPasswordEndpoint, body: body);
   }
 
