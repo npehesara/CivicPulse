@@ -5,6 +5,7 @@ import '../../data/models/login_request_model.dart';
 import '../../data/models/register_request_model.dart';
 import '../../data/models/user_model.dart';
 import '../../data/repositories/auth_repository.dart';
+import '../../../users/data/models/user_profile_model.dart';
 
 enum AuthStatus {
   initial,
@@ -68,6 +69,31 @@ class AuthController extends ChangeNotifier {
   void clearError() {
     _errorMessage = null;
     _validationErrors = null;
+    notifyListeners();
+  }
+
+  void updateCurrentUser(UserModel user) {
+    _currentUser = user;
+    notifyListeners();
+  }
+
+  void syncUserProfile(UserProfileModel profile) {
+    _currentUser = UserModel(
+      userId: profile.userId,
+      fullName: profile.fullName,
+      email: profile.email,
+      phoneNumber: profile.phoneNumber,
+      profileImage: profile.profileImage,
+      role: profile.role,
+      accountStatus: profile.accountStatus,
+      registeredTerritoryId: profile.registeredTerritoryId ?? profile.territoryId,
+      registeredTerritoryName: profile.registeredTerritoryName ?? profile.territoryName,
+      territoryId: profile.territoryId ?? profile.registeredTerritoryId,
+      territoryName: profile.territoryName ?? profile.registeredTerritoryName,
+      homeLatitude: profile.homeLatitude,
+      homeLongitude: profile.homeLongitude,
+      createdAt: profile.createdAt != null ? DateTime.tryParse(profile.createdAt!) : _currentUser?.createdAt,
+    );
     notifyListeners();
   }
 

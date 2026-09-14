@@ -14,6 +14,12 @@ public class UpdateProfileRequest {
 
     private Long registeredTerritoryId;
 
+    private Long territoryId;
+
+    private Double homeLatitude;
+
+    private Double homeLongitude;
+
     public UpdateProfileRequest() {
     }
 
@@ -42,10 +48,34 @@ public class UpdateProfileRequest {
     }
 
     public Long getRegisteredTerritoryId() {
-        return registeredTerritoryId;
+        return registeredTerritoryId != null ? registeredTerritoryId : territoryId;
     }
 
     public void setRegisteredTerritoryId(Long registeredTerritoryId) {
         this.registeredTerritoryId = registeredTerritoryId;
+    }
+
+    public Long getTerritoryId() {
+        return territoryId != null ? territoryId : registeredTerritoryId;
+    }
+
+    public void setTerritoryId(Long territoryId) {
+        this.territoryId = territoryId;
+    }
+
+    public Double getHomeLatitude() {
+        return homeLatitude;
+    }
+
+    public void setHomeLatitude(Double homeLatitude) {
+        this.homeLatitude = homeLatitude;
+    }
+
+    public Double getHomeLongitude() {
+        return homeLongitude;
+    }
+
+    public void setHomeLongitude(Double homeLongitude) {
+        this.homeLongitude = homeLongitude;
     }
 }

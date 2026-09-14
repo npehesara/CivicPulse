@@ -42,6 +42,8 @@ class ApiConstants {
 
   // User & Profile Endpoints
   static const String userMeEndpoint = '/api/users/me';
+  static const String userProfileImageEndpoint = '/api/users/me/profile-image';
+  static const String userPasswordEndpoint = '/api/users/me/password';
   static String userProfileEndpoint(int id) => '/api/users/$id';
   static const String userSearchEndpoint = '/api/users/search';
 

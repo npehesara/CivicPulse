@@ -125,22 +125,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                       offset: const Offset(0, -36),
                                       child: Column(
                                         children: [
-                                          CircleAvatar(
-                                            radius: 40,
-                                            backgroundColor: AppColors.background,
-                                            child: CircleAvatar(
-                                              radius: 36,
-                                              backgroundColor: AppColors.primaryLight,
-                                              child: Text(
-                                                profile.fullName.isNotEmpty ? profile.fullName[0].toUpperCase() : 'C',
-                                                style: const TextStyle(
-                                                  fontSize: 32,
-                                                  fontWeight: FontWeight.w700,
-                                                  color: AppColors.primary,
-                                                ),
-                                              ),
-                                            ),
-                                          ),
+                                          _buildAvatar(profile),
                                           const SizedBox(height: 8),
                                           Text(
                                             profile.fullName,
@@ -196,9 +181,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                             const SizedBox(height: 8),
                                             _buildInfoRow(Icons.phone_outlined, profile.phoneNumber!),
                                           ],
-                                          if (profile.registeredTerritoryName != null) ...[
+                                          if ((profile.territoryName ?? profile.registeredTerritoryName) != null) ...[
                                             const SizedBox(height: 8),
-                                            _buildInfoRow(Icons.location_on_outlined, profile.registeredTerritoryName!),
+                                            _buildInfoRow(Icons.location_on_outlined, profile.territoryName ?? profile.registeredTerritoryName!),
                                           ],
 
                                           const SizedBox(height: 16),
@@ -214,8 +199,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                                         builder: (_) => EditProfileScreen(profile: profile),
                                                       ),
                                                     );
-                                                    if (updated == true) {
-                                                      profileController.loadProfile();
+                                                    if (updated == true && mounted) {
+                                                      await profileController.loadProfile();
+                                                      if (profileController.profile != null) {
+                                                        context.read<AuthController>().syncUserProfile(profileController.profile!);
+                                                      }
                                                     }
                                                   },
                                                   icon: const Icon(Icons.edit_outlined, size: 18, color: AppColors.primary),
@@ -338,6 +326,75 @@ class _ProfileScreenState extends State<ProfileScreen> {
         const SizedBox(height: 2),
         Text(label, style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
       ],
+    );
+  }
+
+  Widget _buildAvatar(UserProfileModel profile) {
+    final imageUrl = profile.profileImage?.trim();
+    final hasImage = imageUrl != null && imageUrl.isNotEmpty && imageUrl.startsWith('http');
+
+    return Container(
+      width: 84,
+      height: 84,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: AppColors.background,
+        border: Border.all(color: Colors.white, width: 4),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.1),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: ClipOval(
+        child: hasImage
+            ? Image.network(
+                imageUrl,
+                fit: BoxFit.cover,
+                width: 76,
+                height: 76,
+                loadingBuilder: (context, child, loadingProgress) {
+                  if (loadingProgress == null) return child;
+                  return Container(
+                    color: AppColors.primaryLight,
+                    child: const Center(
+                      child: SizedBox(
+                        width: 24,
+                        height: 24,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: AppColors.primary,
+                        ),
+                      ),
+                    ),
+                  );
+                },
+                errorBuilder: (context, error, stackTrace) {
+                  return _buildFallbackInitials(profile);
+                },
+              )
+            : _buildFallbackInitials(profile),
+      ),
+    );
+  }
+
+  Widget _buildFallbackInitials(UserProfileModel profile) {
+    final initial = profile.fullName.trim().isNotEmpty
+        ? profile.fullName.trim()[0].toUpperCase()
+        : 'C';
+    return Container(
+      color: AppColors.primaryLight,
+      alignment: Alignment.center,
+      child: Text(
+        initial,
+        style: const TextStyle(
+          fontSize: 32,
+          fontWeight: FontWeight.w700,
+          color: AppColors.primary,
+        ),
+      ),
     );
   }
 
